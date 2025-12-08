@@ -16,22 +16,28 @@ st.caption("Your personal real-time weather assistant")
 st.sidebar.caption("Weather Time v1.0.2 | Built with Streamlit")
 st.sidebar.caption("Data provided by Open-Meteo API")
 
+lat = st.sidebar.number_input("Latitude", value=0.0)
+long = st.sidebar.number_input("Longitude", value=0.0)
+
+st.sidebar.markdown("### 🌍 Select a City")
+
 cities = {
-    "Manual Input": None,
+    "Select a city": (0.0, 0.0),
     "New York, USA": (40.7128, -74.0060),
     "London, UK": (51.5074, -0.1278),
     "Berlin, Germany": (52.52, 13.41),
+    "Tokyo, Japan": (35.6895, 139.6917),
+    "Colombo, Sri Lanka": (6.9271, 79.8612)
 }
 
-city_choice = st.sidebar.selectbox("Select City", list(cities.keys()))
+selected_city = st.sidebar.selectbox("Choose a city", list(cities.keys()))
 
-if city_choice == "Manual Input":
-    lat = st.sidebar.number_input("Latitude", value=0.0)
-    long = st.sidebar.number_input("Longitude", value=0.0)
-else:
-    lat, long = cities[city_choice]
-    st.sidebar.success(f"Selected: {city_choice}")
-    st.sidebar.write(f"Lat: {lat}, Long: {long}")
+if selected_city != "Select a city":
+    lat, long = cities[selected_city]
+
+if lat == 0.0 and long == 0.0:
+    st.warning("⚠ Please select a city or enter valid coordinates.")
+    st.stop()
 
 
 
