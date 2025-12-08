@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 from numpy.random import default_rng as rng
+import plotly.express as px
 
 st.set_page_config(
     page_title="Weather Time",
@@ -84,6 +85,12 @@ Wind_df = pd.DataFrame({
     "Wind Speed": Weather_data['hourly']['wind_speed_10m']
 })
 
+daily_df = pd.DataFrame({
+    "Date": Weather_data['daily']['time'],
+    "Max Temperature": Weather_data['daily']['temperature_2m_max'],
+    "Min Temperature": Weather_data['daily']['temperature_2m_min']
+})
+
 tab1, tab2 = st.tabs(["📊 Hourly Charts", "📅 Daily Chart"])
 
 with tab1:
@@ -98,7 +105,16 @@ with tab1:
 
 with tab2:
     st.title("🚧 Coming Soon")
-    st.write("Daily weather forecast will be added here.")
+    st.write("Daily weather forecast will be added here, And More features will be added soon.")
+    st.subheader("🌡 Daily Temperature Range")
 
-
+    fig = px.area(
+        daily_df,
+        x="Date",
+        y=["Min Temperature", "Max Temperature"],
+        title="Daily Temperature Range",
+        labels={"value": "Temperature (°C)", "Date": "Date"},
+        color_discrete_sequence=["#3498db", "#e74c3c"]  # Blue for Min, Red for Max
+    )
+    st.plotly_chart(fig)
 
