@@ -13,12 +13,12 @@ st.set_page_config(
 st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
 
-lat = st.sidebar.number_input("Latitude", value=0.0)
-long = st.sidebar.number_input("Longitude", value=0.0)
-
 #st.sidebar.markdown("---")
 st.sidebar.caption("Weather Time v1.0.2 | Built with Streamlit")
 st.sidebar.caption("Data provided by Open-Meteo API")
+
+lat = st.sidebar.number_input("Latitude", value=0.0)
+long = st.sidebar.number_input("Longitude", value=0.0)
 
 st.sidebar.markdown("### 🌍 Select a City")
 
