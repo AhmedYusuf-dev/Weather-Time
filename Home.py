@@ -108,6 +108,7 @@ with tab2:
     st.write("Daily weather forecast will be added here, And More features will be added soon.")
     st.subheader("🌡 Daily Temperature Range")
 
+
     fig = px.area(
         daily_df,
         x="Date",
