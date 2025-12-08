@@ -15,6 +15,7 @@ st.caption("Your personal real-time weather assistant")
 
 #st.sidebar.markdown("---")
 st.sidebar.caption("Weather Time v1.0.2 | Built with Streamlit")
+if lat == 0.0 and long == 0.0:
 st.sidebar.caption("Data provided by Open-Meteo API")
 
 lat = st.sidebar.number_input("Latitude", value=0.0)
