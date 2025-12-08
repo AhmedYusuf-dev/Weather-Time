@@ -23,12 +23,16 @@ cities = {
     "Berlin, Germany": (52.52, 13.41),
 }
 
-city_choice = st.sidebar.selectbox("Select City", list(cities.keys()), index=0)
+city_choice = st.sidebar.selectbox("Select City", list(cities.keys()))
 
-lat, long = cities[city_choice]
+if city_choice == "Manual Input":
+    lat = st.sidebar.number_input("Latitude", value=0.0)
+    long = st.sidebar.number_input("Longitude", value=0.0)
+else:
+    lat, long = cities[city_choice]
+    st.sidebar.success(f"Selected: {city_choice}")
+    st.sidebar.write(f"Lat: {lat}, Long: {long}")
 
-st.sidebar.success(f"Selected: {city_choice}")
-st.sidebar.write(f"Lat: {lat}, Long: {long}")
 
 
 url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=temperature_2m_max,weather_code,temperature_2m_min,apparent_temperature_max,sunrise,apparent_temperature_min,sunset,daylight_duration,sunshine_duration,uv_index_max,uv_index_clear_sky_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,shortwave_radiation_sum,et0_fao_evapotranspiration,rain_sum,showers_sum,snowfall_sum,precipitation_sum,precipitation_hours,precipitation_probability_max&hourly=temperature_2m,rain,showers,snowfall,soil_temperature_0cm,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,snow_depth,soil_temperature_6cm,soil_temperature_18cm,soil_temperature_54cm,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm,soil_moisture_9_to_27cm,soil_moisture_27_to_81cm,wind_speed_10m,weather_code,pressure_msl,surface_pressure,wind_speed_120m,wind_speed_80m,wind_speed_180m,cloud_cover,wind_direction_10m,cloud_cover_low,wind_direction_80m,cloud_cover_mid,wind_direction_120m,cloud_cover_high,wind_direction_180m,visibility,wind_gusts_10m,evapotranspiration,temperature_80m,et0_fao_evapotranspiration,temperature_120m,vapour_pressure_deficit,temperature_180m&current=temperature_2m,relative_humidity_2m,is_day,wind_speed_10m,rain,showers,snowfall,apparent_temperature,precipitation,wind_direction_10m,wind_gusts_10m,cloud_cover,weather_code,pressure_msl,surface_pressure&timezone=auto"
