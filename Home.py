@@ -12,8 +12,7 @@ st.set_page_config(
 )
 
 st.write("✅ APP STARTED")
-st.write("📁 Files in app folder:")
-st.write(os.listdir())
+#st.write(os.listdir())
 
 
 st.title("🌦 Weather Time")
@@ -62,14 +61,17 @@ except:
     st.error("⚠ Failed to fetch weather data. Check your internet or location.")
     st.stop()
 
-col1, col2, col3, col4 = st.columns(4)
+Metrics_on = st.toggle("Show More Features")
+
+col1, col2 = st.columns(2)
 
 col1.metric("🌡 Temperature", f"{Weather_data['current']['temperature_2m']} ℃")
 col2.metric("💨 Wind", f"{Weather_data['current']['wind_speed_10m']} Km/h")
+
+col3, col4 = st.columns(2)
+
 col3.metric("💧 Humidity", f"{Weather_data['current']['relative_humidity_2m']}%")
 col4.metric("🌧 Rain Now", f"{Weather_data['current']['rain']} mm")
-
-Metrics_on = st.sidebar.toggle("Show More Features")
 
 if Metrics_on:
     col5, col6 = st.columns(2)
