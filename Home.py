@@ -1,192 +1,213 @@
 import streamlit as st
 import requests
 import pandas as pd
-from numpy.random import default_rng as rng
 import plotly.express as px
-import os
+from datetime import datetime, timedelta
 
+# --- PAGE CONFIG ---
 st.set_page_config(
     page_title="Weather Time",
     page_icon="🌦",
     layout="wide"
 )
 
-st.write("✅ APP STARTED")
-#st.write(os.listdir())
-
-
 st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
-
-#st.sidebar.markdown("---")
-st.sidebar.caption("Weather Time v0.5 | Built with Streamlit")
+st.sidebar.caption("Weather Time v1.0 | Built with Streamlit")
 st.sidebar.caption("Data provided by Open-Meteo API")
 
-lat = st.sidebar.number_input("Latitude", value=0.0)
-long = st.sidebar.number_input("Longitude", value=0.0)
+# --- CONTINENT & CITY SELECTION ---
+st.sidebar.markdown("### 🌍 Select a Continent & City or Enter Coordinates")
 
-st.sidebar.markdown("### 🌍 Select a City")
-
-cities = {
-    "Select a city": (0.0, 0.0),
-    "New York, USA": (40.7128, -74.0060),
-    "London, UK": (51.5074, -0.1278),
-    "Berlin, Germany": (52.52, 13.41),
-    "Tokyo, Japan": (35.6895, 139.6917),
-    "Colombo, Sri Lanka": (6.9271, 79.8612)
+continents = {
+    "Custom Coordinates": {"Custom Coordinates": (0.0, 0.0)},
+    "North America": {
+        "New York, USA": (40.7128, -74.0060),
+        "Toronto, Canada": (43.6532, -79.3832),
+        "Los Angeles, USA": (34.0522, -118.2437),
+    },
+    "Europe": {
+        "London, UK": (51.5074, -0.1278),
+        "Berlin, Germany": (52.52, 13.41),
+        "Paris, France": (48.8566, 2.3522),
+        "Moscow, Russia": (55.7558, 37.6173),
+    },
+    "Asia": {
+        "Tokyo, Japan": (35.6895, 139.6917),
+        "Beijing, China": (39.9042, 116.4074),
+        "Delhi, India": (28.6139, 77.2090),
+        "Colombo, Sri Lanka": (6.9271, 79.8612),
+        "Bangkok, Thailand": (13.7563, 100.5018),
+    },
+    "Australia & Oceania": {
+        "Sydney, Australia": (-33.8688, 151.2093),
+        "Auckland, New Zealand": (-36.8485, 174.7633),
+    },
+    "South America": {
+        "Rio de Janeiro, Brazil": (-22.9068, -43.1729),
+        "Buenos Aires, Argentina": (-34.6037, -58.3816),
+        "Santiago, Chile": (-33.4489, -70.6693),
+    },
+    "Africa": {
+        "Cairo, Egypt": (30.0444, 31.2357),
+        "Lagos, Nigeria": (6.5244, 3.3792),
+        "Johannesburg, South Africa": (-26.2041, 28.0473),
+    }
 }
 
-selected_city = st.sidebar.selectbox("Choose a city", list(cities.keys()))
+selected_continent = st.sidebar.selectbox("Select Continent", list(continents.keys()))
+cities = continents[selected_continent]
+selected_city = st.sidebar.selectbox("Select City", list(cities.keys()))
 
-if selected_city != "Select a city":
+if selected_city == "Custom Coordinates":
+    lat = st.sidebar.number_input("Latitude", value=0.0, format="%.6f")
+    long = st.sidebar.number_input("Longitude", value=0.0, format="%.6f")
+else:
     lat, long = cities[selected_city]
 
 if lat == 0.0 and long == 0.0:
     st.warning("⚠ Please select a city or enter valid coordinates.")
     st.stop()
 
+# --- CACHE API RESPONSE ---
+@st.cache_data(ttl=600)
+def fetch_weather(lat, long):
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,daylight_duration&hourly=temperature_2m,rain,wind_speed_10m,relativehumidity_2m,apparent_temperature,pressure_msl,cloudcover&current_weather=true&timezone=auto"
+    return requests.get(url).json()
 
-
-url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={long}&daily=temperature_2m_max,weather_code,temperature_2m_min,apparent_temperature_max,sunrise,apparent_temperature_min,sunset,daylight_duration,sunshine_duration,uv_index_max,uv_index_clear_sky_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,shortwave_radiation_sum,et0_fao_evapotranspiration,rain_sum,showers_sum,snowfall_sum,precipitation_sum,precipitation_hours,precipitation_probability_max&hourly=temperature_2m,rain,showers,snowfall,soil_temperature_0cm,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,snow_depth,soil_temperature_6cm,soil_temperature_18cm,soil_temperature_54cm,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm,soil_moisture_9_to_27cm,soil_moisture_27_to_81cm,wind_speed_10m,weather_code,pressure_msl,surface_pressure,wind_speed_120m,wind_speed_80m,wind_speed_180m,cloud_cover,wind_direction_10m,cloud_cover_low,wind_direction_80m,cloud_cover_mid,wind_direction_120m,cloud_cover_high,wind_direction_180m,visibility,wind_gusts_10m,evapotranspiration,temperature_80m,et0_fao_evapotranspiration,temperature_120m,vapour_pressure_deficit,temperature_180m&current=temperature_2m,relative_humidity_2m,is_day,wind_speed_10m,rain,showers,snowfall,apparent_temperature,precipitation,wind_direction_10m,wind_gusts_10m,cloud_cover,weather_code,pressure_msl,surface_pressure&timezone=auto"
-#https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&daily=temperature_2m_max,weather_code,temperature_2m_min,apparent_temperature_max,sunrise,apparent_temperature_min,sunset,daylight_duration,sunshine_duration,uv_index_max,uv_index_clear_sky_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,shortwave_radiation_sum,et0_fao_evapotranspiration,rain_sum,showers_sum,snowfall_sum,precipitation_sum,precipitation_hours,precipitation_probability_max&hourly=temperature_2m,rain,showers,snowfall,soil_temperature_0cm,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,snow_depth,soil_temperature_6cm,soil_temperature_18cm,soil_temperature_54cm,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm,soil_moisture_9_to_27cm,soil_moisture_27_to_81cm,wind_speed_10m,weather_code,pressure_msl,surface_pressure,wind_speed_120m,wind_speed_80m,wind_speed_180m,cloud_cover,wind_direction_10m,cloud_cover_low,wind_direction_80m,cloud_cover_mid,wind_direction_120m,cloud_cover_high,wind_direction_180m,visibility,wind_gusts_10m,evapotranspiration,temperature_80m,et0_fao_evapotranspiration,temperature_120m,vapour_pressure_deficit,temperature_180m&current=temperature_2m,relative_humidity_2m,is_day,wind_speed_10m,rain,showers,snowfall,apparent_temperature,precipitation,wind_direction_10m,wind_gusts_10m,cloud_cover,weather_code,pressure_msl,surface_pressure&timezone=auto
-
-try:
-    Weather_data = requests.get(url).json()
-
-    # ✅ CHECK if "current" exists BEFORE using it
-    if "current" not in Weather_data:
-        st.warning("⚠ Please select a city or enter valid coordinates.")
-        st.stop()
-except:
-    st.error("⚠ Failed to fetch weather data. Check your internet or location.")
+Weather_data = fetch_weather(lat, long)
+if "current_weather" not in Weather_data:
+    st.warning("⚠ Weather data not available.")
     st.stop()
 
-Metrics_on = st.toggle("Show More Features")
+# --- CURRENT METRICS ---
+st.subheader("🌟 Current Weather Metrics")
+curr = Weather_data["current_weather"]
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("🌡 Temperature", f"{curr['temperature']} ℃")
+col2.metric("💨 Wind Speed", f"{curr['windspeed']} Km/h")
+col3.metric("💧 Humidity", f"{Weather_data['hourly']['relativehumidity_2m'][0]}%")
+col4.metric("🌧 Rain", f"{Weather_data['hourly']['rain'][0]} mm")
 
-col1, col2 = st.columns(2)
+# --- MORE METRICS TOGGLE ---
+if st.sidebar.checkbox("Show More Features"):
+    st.subheader("📈 Additional Weather Metrics")
+    col5, col6, col7, col8 = st.columns(4)
+    col5.metric("🧭 Wind Direction", f"{curr['winddirection']} °")
+    col6.metric("🌍 Timezone", f"{Weather_data['timezone']}")
+    col7.metric("🌞 Sunrise", Weather_data['daily']['sunrise'][0].split("T")[1])
+    col8.metric("🌅 Sunset", Weather_data['daily']['sunset'][0].split("T")[1])
+    st.metric("UV Index", Weather_data['daily']['uv_index_max'][0])
+    st.metric("Pressure", Weather_data['hourly']['pressure_msl'][0])
+    st.metric("Cloud Cover", Weather_data['hourly']['cloudcover'][0])
+    st.write(f"🌞 Daylight Duration: {Weather_data['daily']['daylight_duration'][0]}")
 
-col1.metric("🌡 Temperature", f"{Weather_data['current']['temperature_2m']} ℃")
-col2.metric("💨 Wind", f"{Weather_data['current']['wind_speed_10m']} Km/h")
-
-col3, col4 = st.columns(2)
-
-col3.metric("💧 Humidity", f"{Weather_data['current']['relative_humidity_2m']}%")
-col4.metric("🌧 Rain Now", f"{Weather_data['current']['rain']} mm")
-
-if Metrics_on:
-    col5, col6 = st.columns(2)
-    col5.metric("🧭 Wind Direction", f"{Weather_data['current']['wind_direction_10m']} °")
-    col6.metric("🌍 Time Zone", f"{Weather_data['timezone']}")
-
-Temp_df = pd.DataFrame({
-    "Time": Weather_data['hourly']['time'],
-    "Temperature": Weather_data['hourly']['temperature_2m']
-})
-
-Rain_df = pd.DataFrame({
-    "Time": Weather_data['hourly']['time'],
-    "Rain": Weather_data['hourly']['rain']
-})
-
-Wind_df = pd.DataFrame({
-    "Time": Weather_data['hourly']['time'],
-    "Wind Speed": Weather_data['hourly']['wind_speed_10m']
-})
-
-
-
-tab1, tab2 = st.tabs(["📊 Hourly Charts", "📅 Daily Chart"])
-
-with tab1:
-
-    hourly_df = pd.DataFrame({
-    "datetime": Weather_data["hourly"]["time"],
+# --- HOURLY DATAFRAME ---
+hourly_df = pd.DataFrame({
+    "datetime": pd.to_datetime(Weather_data["hourly"]["time"]),
     "Temperature": Weather_data["hourly"]["temperature_2m"],
+    "Apparent Temp": Weather_data["hourly"]["apparent_temperature"],
     "Rain": Weather_data["hourly"]["rain"],
     "Wind Speed": Weather_data["hourly"]["wind_speed_10m"],
-    })
+    "Humidity": Weather_data["hourly"]["relativehumidity_2m"],
+})
 
-# Convert to datetime
-    hourly_df["datetime"] = pd.to_datetime(hourly_df["datetime"])
+# --- DAILY DATAFRAME ---
+daily_df = pd.DataFrame({
+    "date": pd.to_datetime(Weather_data["daily"]["time"]),
+    "Max Temp": Weather_data["daily"]["temperature_2m_max"],
+    "Min Temp": Weather_data["daily"]["temperature_2m_min"],
+    "UV Index": Weather_data["daily"]["uv_index_max"]
+})
 
-# --- HOURLY FILTER SECTION ---
-    st.subheader("⏱ Select Time Range")
+# --- TABS ---
+tab1, tab2, tab3 = st.tabs(["📊 Hourly Charts", "📅 Daily Charts", "🌈 Weather Insights"])
 
-    min_time = hourly_df["datetime"].min()
-    max_time = hourly_df["datetime"].max()
-
+# --- HOURLY CHARTS ---
+with tab1:
+    st.subheader("⏱ Hourly Weather Charts")
     colA, colB = st.columns(2)
+    start_dt = pd.to_datetime(f"{colA.date_input('Start Date', value=hourly_df['datetime'].min().date(), key='hourly_start')} {colA.time_input('Start Time', value=hourly_df['datetime'].min().time(), key='hourly_start_time')}")
+    end_dt = pd.to_datetime(f"{colB.date_input('End Date', value=hourly_df['datetime'].max().date(), key='hourly_end')} {colB.time_input('End Time', value=hourly_df['datetime'].max().time(), key='hourly_end_time')}")
+    hourly_filtered = hourly_df[(hourly_df["datetime"] >= start_dt) & (hourly_df["datetime"] <= end_dt)]
 
-# Start
-    start_date = colA.date_input("Start Date", value=hourly_df["datetime"].min().date())
-    start_time = colA.time_input("Start Time", value=hourly_df["datetime"].min().time())
-    start_datetime = pd.to_datetime(f"{start_date} {start_time}")
-
-# End
-    end_date = colB.date_input("End Date", value=hourly_df["datetime"].max().date())
-    end_time = colB.time_input("End Time", value=hourly_df["datetime"].max().time())
-    end_datetime = pd.to_datetime(f"{end_date} {end_time}")
-
-# --- Filter DataFrame ---
-    hourly_filtered = hourly_df[
-    (hourly_df["datetime"] >= start_datetime) &
-    (hourly_df["datetime"] <= end_datetime)
-    ]
-
-# --- Show warning if no data ---
     if hourly_filtered.empty:
-        st.warning("⚠ No data available for the selected date/time range. Please select a valid range.")
+        st.warning("⚠ No data for the selected time range.")
     else:
-        st.subheader("🌡 Temperature")
-        st.line_chart(hourly_filtered, x="datetime", y="Temperature")
+        st.subheader("🌡 Temperature & Apparent Temperature")
+        st.line_chart(hourly_filtered.set_index("datetime")[["Temperature", "Apparent Temp"]], height=300)
 
-        st.subheader("🌧 Rain")
-        st.bar_chart(hourly_filtered, x="datetime", y="Rain")
+        st.subheader("🌧 Rainfall")
+        st.bar_chart(hourly_filtered.set_index("datetime")[["Rain"]], height=250)
 
         st.subheader("💨 Wind Speed")
-        st.line_chart(hourly_filtered, x="datetime", y="Wind Speed")
+        st.line_chart(hourly_filtered.set_index("datetime")[["Wind Speed"]], height=250)
 
+        st.subheader("💧 Humidity")
+        st.line_chart(hourly_filtered.set_index("datetime")[["Humidity"]], height=250)
+
+# --- DAILY CHARTS ---
 with tab2:
-    st.title("🚧 Coming Soon")
-    st.write("Daily weather forecast will be added here, And More features will be added soon.")
-    st.subheader("🌡 Daily Temperature Range")
-
-
-    daily_df = pd.DataFrame({
-    "date": Weather_data["daily"]["time"],
-    "temp_max": Weather_data["daily"]["temperature_2m_max"],
-    "temp_min": Weather_data["daily"]["temperature_2m_min"],
-    })
-
-    daily_df["date"] = pd.to_datetime(daily_df["date"])
-
-    start_date = st.date_input(
-    "Start Date",
-    value=daily_df["date"].min(),
-    min_value=daily_df["date"].min(),
-    max_value=daily_df["date"].max()
-    )
-
-    end_date = st.date_input(
-    "End Date",
-    value=daily_df["date"].max(),
-    min_value=daily_df["date"].min(),
-    max_value=daily_df["date"].max()
-    )
-
-    daily_filtered = daily_df[
-        (daily_df["date"] >= pd.to_datetime(start_date)) &
-        (daily_df["date"] <= pd.to_datetime(end_date))
-    ]
+    st.subheader("📅 Daily Weather Charts")
+    start_day = st.date_input("Start Date", value=daily_df["date"].min().date(), key="daily_start")
+    end_day = st.date_input("End Date", value=daily_df["date"].max().date(), key="daily_end")
+    daily_filtered = daily_df[(daily_df["date"] >= pd.to_datetime(start_day)) & (daily_df["date"] <= pd.to_datetime(end_day))]
 
     if daily_filtered.empty:
-        st.warning("⚠ No data available for the selected date range. Please select a valid range.")
+        st.warning("⚠ No data for selected date range.")
     else:
-        fig = px.area(
-            daily_filtered,
-            x="date",
-            y=["temp_min", "temp_max"],
-            labels={"value": "Temperature (°C)", "date": "Date"},
-            title="Daily Temperature Range",
+        st.subheader("🌡 Temperature Range")
+        st.area_chart(daily_filtered.set_index("date")[["Min Temp", "Max Temp"]], height=300)
+
+        st.subheader("☀️ Daily UV Index")
+        st.bar_chart(daily_filtered.set_index("date")[["UV Index"]], height=200)
+
+        st.download_button(
+            "⬇ Download Daily CSV",
+            daily_filtered.to_csv(index=False).encode("utf-8"),
+            file_name=f"{selected_city}_daily_weather.csv"
         )
-    st.plotly_chart(fig, use_container_width=True)
+
+# --- WEATHER INSIGHTS / ALERTS ---
+with tab3:
+    st.subheader("⚠ Weather Insights & Alerts")
+    latest_temp = curr['temperature']
+    latest_wind = curr['windspeed']
+    latest_uv = Weather_data['daily']['uv_index_max'][0]
+
+    if latest_uv > 7:
+        st.warning("☀️ UV Alert: High UV index! Wear sunscreen.")
+    if latest_temp > 35:
+        st.warning("🔥 Heat Alert: Stay hydrated!")
+    elif latest_temp < 5:
+        st.warning("❄️ Cold Alert: Dress warmly!")
+    if latest_wind > 30:
+        st.warning("💨 Wind Alert: Strong winds, secure loose objects!")
+
+    st.subheader("💡 Quick Weather Tips")
+    if latest_temp > 25 and latest_uv > 5:
+        st.write("- Wear sunscreen and light clothing.")
+    elif latest_temp < 10:
+        st.write("- Wear warm clothing and layers.")
+    if latest_wind > 20:
+        st.write("- Be cautious of high winds.")
+    if Weather_data['hourly']['rain'][0] > 0:
+        st.write("- Carry an umbrella or raincoat.")
+    if latest_humidity := Weather_data['hourly']['relativehumidity_2m'][0] > 80:
+        st.write("- High humidity: Stay cool and hydrated.")
+
+    st.subheader("🌤 General Weather Safety Tips")
+    st.write("- Check hourly updates for sudden weather changes.")
+    st.write("- Follow local weather advisories for safety.")
+    st.write("- Use weather apps for real-time notifications.")
+    st.write("- Plan outdoor activities considering the weather forecast.")
+    st.write("- Keep an eye on temperature fluctuations throughout the day.")
+    st.write("- Dress appropriately for the weather conditions.")
+    st.write("- Stay informed about weather patterns in your area.")
+    st.write("- Take necessary precautions during extreme weather conditions.")
+    st.write("- Ensure proper ventilation during high humidity conditions.")
+    st.write("- Protect yourself from UV exposure during peak hours.")
+    st.write("- Stay indoors during severe weather warnings.")
+    st.write("- Regularly check weather updates before traveling.")
+    st.write("- Maintain hydration in hot weather conditions.")
+    st.write("- Use layered clothing to adapt to changing temperatures.")

@@ -1,48 +1,47 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import os
 
-st.title("Page 2")
-st.write("This is the second page.")
+st.set_page_config(
+    page_title="Weather Time - Reviews",
+    page_icon="💬",
+    layout="wide"
+)
 
-st.page_link("Home.py", label="Back to Home", icon="🏠")
+st.title("💬 Weather Time Reviews")
+st.caption("Share your thoughts or read reviews from other users.")
 
-# File to store reviews
-reviews_file = "reviews.csv"
+# --- In-memory storage for reviews ---
+# This will reset when the app reloads. For persistent storage, you can use a database or Google Sheets.
+if "reviews_list" not in st.session_state:
+    st.session_state.reviews_list = []
 
-# Sidebar info
-st.sidebar.caption("Send us your feedback!")
-
-st.title("📝 App Reviews")
-
-# --- Input form ---
+# --- User Input ---
 with st.form("review_form"):
-    name = st.text_input("Your Name")
-    review = st.text_area("Your Feedback")
-    rating = st.slider("Rating (1-5)", 1, 5, 5)
+    user_name = st.text_input("Your Name", max_chars=50)
+    user_review = st.text_area("Your Review", max_chars=500)
     submitted = st.form_submit_button("Submit Review")
 
     if submitted:
-        new_review = {
-            "Name": name,
-            "Review": review,
-            "Rating": rating,
-            "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-
-        # Save to CSV
-        if os.path.exists(reviews_file):
-            df = pd.read_csv(reviews_file)
-            df = df.append(new_review, ignore_index=True)
+        if not user_name.strip() or not user_review.strip():
+            st.warning("⚠ Please enter both your name and review before submitting.")
         else:
-            df = pd.DataFrame([new_review])
-        df.to_csv(reviews_file, index=False)
+            new_review = {
+                "User": user_name.strip(),
+                "Review": user_review.strip(),
+                "Time": datetime.now()
+            }
+            st.session_state.reviews_list.append(new_review)
+            st.success("✅ Review submitted successfully!")
 
-        st.success("✅ Thank you for your feedback!")
-
-# --- Display all reviews ---
-if os.path.exists(reviews_file):
-    df = pd.read_csv(reviews_file)
-    st.subheader("Previous Reviews")
-    st.dataframe(df.sort_values("Date", ascending=False))
+# --- Display Reviews ---
+st.subheader("📝 Latest Reviews")
+if st.session_state.reviews_list:
+    reviews_df = pd.DataFrame(st.session_state.reviews_list)
+    # Sort by time descending
+    reviews_df = reviews_df.sort_values(by="Time", ascending=False)
+    # Format the timestamp nicely
+    reviews_df["Time"] = reviews_df["Time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    st.dataframe(reviews_df)
+else:
+    st.info("ℹ No reviews yet. Be the first to submit one!")
