@@ -3,12 +3,18 @@ import requests
 import pandas as pd
 from numpy.random import default_rng as rng
 import plotly.express as px
+import os
 
 st.set_page_config(
     page_title="Weather Time",
     page_icon="🌦",
     layout="wide"
 )
+
+st.write("✅ APP STARTED")
+st.write("📁 Files in app folder:")
+st.write(os.listdir())
+
 
 st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
