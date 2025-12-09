@@ -19,7 +19,7 @@ st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
 
 #st.sidebar.markdown("---")
-st.sidebar.caption("Weather Time v1.0.2 | Built with Streamlit")
+st.sidebar.caption("Weather Time v0.5 | Built with Streamlit")
 st.sidebar.caption("Data provided by Open-Meteo API")
 
 lat = st.sidebar.number_input("Latitude", value=0.0)
@@ -93,23 +93,58 @@ Wind_df = pd.DataFrame({
     "Wind Speed": Weather_data['hourly']['wind_speed_10m']
 })
 
-daily_df = pd.DataFrame({
-    "Date": Weather_data['daily']['time'],
-    "Max Temperature": Weather_data['daily']['temperature_2m_max'],
-    "Min Temperature": Weather_data['daily']['temperature_2m_min']
-})
+
 
 tab1, tab2 = st.tabs(["📊 Hourly Charts", "📅 Daily Chart"])
 
 with tab1:
-    st.subheader("🌡 Temperature")
-    st.line_chart(Temp_df, x="Time", y="Temperature")
 
-    st.subheader("🌧 Rain")
-    st.bar_chart(Rain_df, x="Time", y="Rain")
+    hourly_df = pd.DataFrame({
+    "datetime": Weather_data["hourly"]["time"],
+    "Temperature": Weather_data["hourly"]["temperature_2m"],
+    "Rain": Weather_data["hourly"]["rain"],
+    "Wind Speed": Weather_data["hourly"]["wind_speed_10m"],
+    })
 
-    st.subheader("💨 Wind")
-    st.line_chart(Wind_df, x="Time", y="Wind Speed")
+# Convert to datetime
+    hourly_df["datetime"] = pd.to_datetime(hourly_df["datetime"])
+
+# --- HOURLY FILTER SECTION ---
+    st.subheader("⏱ Select Time Range")
+
+    min_time = hourly_df["datetime"].min()
+    max_time = hourly_df["datetime"].max()
+
+    colA, colB = st.columns(2)
+
+# Start
+    start_date = colA.date_input("Start Date", value=hourly_df["datetime"].min().date())
+    start_time = colA.time_input("Start Time", value=hourly_df["datetime"].min().time())
+    start_datetime = pd.to_datetime(f"{start_date} {start_time}")
+
+# End
+    end_date = colB.date_input("End Date", value=hourly_df["datetime"].max().date())
+    end_time = colB.time_input("End Time", value=hourly_df["datetime"].max().time())
+    end_datetime = pd.to_datetime(f"{end_date} {end_time}")
+
+# --- Filter DataFrame ---
+    hourly_filtered = hourly_df[
+    (hourly_df["datetime"] >= start_datetime) &
+    (hourly_df["datetime"] <= end_datetime)
+    ]
+
+# --- Show warning if no data ---
+    if hourly_filtered.empty:
+        st.warning("⚠ No data available for the selected date/time range. Please select a valid range.")
+    else:
+        st.subheader("🌡 Temperature")
+        st.line_chart(hourly_filtered, x="datetime", y="Temperature")
+
+        st.subheader("🌧 Rain")
+        st.bar_chart(hourly_filtered, x="datetime", y="Rain")
+
+        st.subheader("💨 Wind Speed")
+        st.line_chart(hourly_filtered, x="datetime", y="Wind Speed")
 
 with tab2:
     st.title("🚧 Coming Soon")
@@ -117,13 +152,41 @@ with tab2:
     st.subheader("🌡 Daily Temperature Range")
 
 
-    fig = px.area(
-        daily_df,
-        x="Date",
-        y=["Min Temperature", "Max Temperature"],
-        title="Daily Temperature Range",
-        labels={"value": "Temperature (°C)", "Date": "Date"},
-        color_discrete_sequence=["#3498db", "#e74c3c"]  # Blue for Min, Red for Max
-    )
-    st.plotly_chart(fig)
+    daily_df = pd.DataFrame({
+    "date": Weather_data["daily"]["time"],
+    "temp_max": Weather_data["daily"]["temperature_2m_max"],
+    "temp_min": Weather_data["daily"]["temperature_2m_min"],
+    })
 
+    daily_df["date"] = pd.to_datetime(daily_df["date"])
+
+    start_date = st.date_input(
+    "Start Date",
+    value=daily_df["date"].min(),
+    min_value=daily_df["date"].min(),
+    max_value=daily_df["date"].max()
+    )
+
+    end_date = st.date_input(
+    "End Date",
+    value=daily_df["date"].max(),
+    min_value=daily_df["date"].min(),
+    max_value=daily_df["date"].max()
+    )
+
+    daily_filtered = daily_df[
+        (daily_df["date"] >= pd.to_datetime(start_date)) &
+        (daily_df["date"] <= pd.to_datetime(end_date))
+    ]
+
+    if daily_filtered.empty:
+        st.warning("⚠ No data available for the selected date range. Please select a valid range.")
+    else:
+        fig = px.area(
+            daily_filtered,
+            x="date",
+            y=["temp_min", "temp_max"],
+            labels={"value": "Temperature (°C)", "date": "Date"},
+            title="Daily Temperature Range",
+        )
+    st.plotly_chart(fig, use_container_width=True)
