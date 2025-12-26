@@ -7,7 +7,6 @@ import time
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Weather Time",
-    page_icon="🌦",
     layout="wide"
 )
 
@@ -15,6 +14,7 @@ st.set_page_config(
 st.session_state.setdefault("ui_mode", "Laptop")
 st.session_state.setdefault("continent", "Asia")
 st.session_state.setdefault("city", "Colombo, Sri Lanka")
+st.session_state.setdefault("unit", "Celsius")  # New: Temperature Unit
 st.session_state.setdefault("show_hourly", True)
 st.session_state.setdefault("show_daily", True)
 st.session_state.setdefault("splash_done", False)
@@ -40,11 +40,10 @@ def show_splash():
     }
     @keyframes fadeOut { to { opacity: 0; visibility: hidden; } }
     .icon { font-size: 90px; animation: float 2s ease-in-out infinite; }
-    @keyframes float {0% {transform: translateY(0);} 50% {transform: translateY(-15px);} 100% {transform: translateY(0);}}
+    @keyframes float {0% {transform: translateY(0);} 50% {transform: translateY(-15px);} 100% {transform: translateY(0);} }
     .title { font-size: 38px; font-weight: bold; }
     .subtitle { opacity: 0.8; }
     </style>
-
     <div class="splash">
         <div class="icon">🌦</div>
         <div class="title">Weather Time</div>
@@ -56,7 +55,7 @@ def show_splash():
     time.sleep(2.5)
     placeholder.empty()
 
-# Trigger splash on first load or UI change
+# Trigger splash
 if not st.session_state.splash_done or st.session_state.ui_mode != st.session_state.last_ui_mode:
     show_splash()
     st.session_state.splash_done = True
@@ -66,23 +65,32 @@ if not st.session_state.splash_done or st.session_state.ui_mode != st.session_st
 st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
 st.markdown("---")
-st.caption("Version 1.1")
+st.caption("Version 1.2")
 
-# ---------------- UI MODE SELECTION ----------------
+# ---------------- UI MODE ----------------
 st.sidebar.markdown("### 📱 UI Mode")
 new_ui = st.sidebar.radio(
     "Select UI Mode",
     ["Laptop", "Mobile"],
     index=["Laptop", "Mobile"].index(st.session_state.ui_mode)
 )
-
 if new_ui != st.session_state.ui_mode:
     st.session_state.ui_mode = new_ui
     st.session_state.splash_done = False
-    st.experimental_rerun = st.rerun  # fallback
     st.rerun()
 
 show_sidebar = st.session_state.ui_mode == "Laptop"
+
+# ---------------- TEMPERATURE UNIT ----------------
+st.sidebar.markdown("### 🌡 Temperature Unit")
+unit = st.sidebar.radio("Select Unit", ["Celsius", "Fahrenheit"], index=["Celsius","Fahrenheit"].index(st.session_state.unit))
+st.session_state.unit = unit
+
+def convert_temp(celsius):
+    if st.session_state.unit == "Celsius":
+        return celsius
+    else:
+        return round((celsius * 9/5) + 32, 1)
 
 # ---------------- CONTINENTS ----------------
 continents = {
@@ -94,21 +102,60 @@ continents = {
 }
 
 # ---------------- LOCATION SELECT ----------------
+def safe_city_index(city, cities_list):
+    return cities_list.index(city) if city in cities_list else 0
+
 if show_sidebar:
     st.sidebar.markdown("### 🌍 Location")
-    st.session_state.continent = st.sidebar.selectbox("Select Continent", list(continents.keys()), index=list(continents.keys()).index(st.session_state.continent))
-    cities = continents[st.session_state.continent]
-    city_keys = list(cities.keys())
-    if st.session_state.city not in city_keys: st.session_state.city = city_keys[0]
-    st.session_state.city = st.sidebar.selectbox("Select City", city_keys, index=city_keys.index(st.session_state.city))
+    st.session_state.continent = st.sidebar.selectbox(
+        "Select Continent",
+        list(continents.keys()),
+        index=safe_city_index(st.session_state.continent, list(continents.keys()))
+    )
+    cities = list(continents[st.session_state.continent].keys())
+    st.session_state.city = st.sidebar.selectbox(
+        "Select City",
+        cities,
+        index=safe_city_index(st.session_state.city, cities)
+    )
+    st.sidebar.subheader("⭐ Favorite Cities")
+    col1, col2 = st.columns(2)
+    with col1:
+        city_input = st.sidebar.text_input("Add a city", "")
+    with col2:
+        if st.sidebar.button("Add to Favorites") and city_input.strip():
+            st.session_state.favorite_cities.append(city_input.strip())
+    if st.session_state.favorite_cities:
+        st.sidebar.write(", ".join(st.session_state.favorite_cities))
 else:
     st.subheader("🌍 Location")
     col1, col2 = st.columns(2)
-    with col1: st.session_state.continent = st.selectbox("Continent", list(continents.keys()), index=list(continents.keys()).index(st.session_state.continent), label_visibility="collapsed")
-    cities = continents[st.session_state.continent]
-    city_keys = list(cities.keys())
-    if st.session_state.city not in city_keys: st.session_state.city = city_keys[0]
-    with col2: st.session_state.city = st.selectbox("City", city_keys, index=city_keys.index(st.session_state.city), label_visibility="collapsed")
+    with col1:
+        st.session_state.continent = st.selectbox(
+            "Continent",
+            list(continents.keys()),
+            index=safe_city_index(st.session_state.continent, list(continents.keys())),
+            label_visibility="collapsed"
+        )
+    cities = list(continents[st.session_state.continent].keys())
+    with col2:
+        st.session_state.city = st.selectbox(
+            "City",
+            cities,
+            index=safe_city_index(st.session_state.city, cities),
+            label_visibility="collapsed"
+        )
+
+    st.subheader("⭐ Favorite Cities")
+    col1, col2 = st.columns(2)
+    with col1:
+        city_input = st.text_input("Add a city", "")
+    with col2:
+        if st.button("Add to Favorites") and city_input.strip():
+            st.session_state.favorite_cities.append(city_input.strip())
+    if st.session_state.favorite_cities:
+        st.write(", ".join(st.session_state.favorite_cities))
+
 
 # ---------------- COORDINATES ----------------
 if st.session_state.city == "Custom Coordinates":
@@ -144,16 +191,18 @@ def safe(lst, i=0, d=0):
     except: return d
 
 # ---------------- METRICS ----------------
-temperature = curr.get("temperature")
+temperature_c = curr.get("temperature")
+temperature = convert_temp(temperature_c)
 wind = curr.get("windspeed")
 rain_now = safe(hourly.get("precipitation"))
 uv_today = safe(daily.get("uv_index_max"))
 
-st.info("🧠 AI Weather Summary: " + ("🌧 Rain expected. " if rain_now>0 else "☀️ No rain. ") + ("🔥 Hot. " if temperature and temperature>30 else ""))
+st.info("🧠 AI Weather Summary: " + ("🌧 Rain expected. " if rain_now>0 else "☀️ No rain. ") + ("🔥 Hot. " if temperature_c and temperature_c>30 else ""))
 
 st.subheader("🌟 Current Weather")
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("🌡 Temp", f"{temperature} °C")
+unit_symbol = "°C" if st.session_state.unit=="Celsius" else "°F"
+c1.metric("🌡 Temp", f"{temperature} {unit_symbol}")
 c2.metric("💨 Wind", f"{wind} km/h")
 c3.metric("💧 Humidity", f"{safe(hourly.get('relativehumidity_2m'))}%")
 c4.metric("🌧 Rain", f"{rain_now} mm")
@@ -161,8 +210,8 @@ c4.metric("🌧 Rain", f"{rain_now} mm")
 # ---------------- CLOTHING ----------------
 st.subheader("👕 Clothing Recommendation")
 clothing = []
-if temperature >= 32: clothing.append("🩳 Light clothing")
-elif temperature >= 22: clothing.append("👕 Comfortable wear")
+if temperature_c >= 32: clothing.append("🩳 Light clothing")
+elif temperature_c >= 22: clothing.append("👕 Comfortable wear")
 else: clothing.append("🧥 Jacket recommended")
 if rain_now > 1: clothing.append("☔ Umbrella")
 if wind > 25: clothing.append("🧢 Windbreaker")
@@ -182,8 +231,18 @@ else: intensity="⛈ Heavy"
 p3.metric("Intensity", intensity)
 
 # ---------------- DATAFRAMES ----------------
-hourly_df = pd.DataFrame({"Time": pd.to_datetime(hourly.get("time", [])),"Temp": hourly.get("temperature_2m", []),"Rain": hourly.get("precipitation", []),"Wind": hourly.get("wind_speed_10m", [])})
-daily_df = pd.DataFrame({"Date": pd.to_datetime(daily.get("time", [])),"Min Temp": daily.get("temperature_2m_min", []),"Max Temp": daily.get("temperature_2m_max", []),"UV": daily.get("uv_index_max", [])})
+hourly_df = pd.DataFrame({
+    "Time": pd.to_datetime(hourly.get("time", [])),
+    "Temp": [convert_temp(t) for t in hourly.get("temperature_2m", [])],
+    "Rain": hourly.get("precipitation", []),
+    "Wind": hourly.get("wind_speed_10m", [])
+})
+daily_df = pd.DataFrame({
+    "Date": pd.to_datetime(daily.get("time", [])),
+    "Min Temp": [convert_temp(t) for t in daily.get("temperature_2m_min", [])],
+    "Max Temp": [convert_temp(t) for t in daily.get("temperature_2m_max", [])],
+    "UV": daily.get("uv_index_max", [])
+})
 
 # ---------------- CHART TOGGLES ----------------
 if show_sidebar:
@@ -216,7 +275,7 @@ with tab2:
 
 with tab3:
     if uv_today>7: st.warning("☀️ High UV today")
-    if temperature>35: st.warning("🔥 Extreme heat")
+    if temperature_c>35: st.warning("🔥 Extreme heat")
     if wind>30: st.warning("💨 Strong winds")
     st.markdown("### 💡 Tips")
     st.write("- Stay hydrated")
@@ -226,11 +285,10 @@ with tab3:
 # ---------------- FAVORITE CITIES ----------------
 st.subheader("⭐ Favorite Cities")
 col1, col2 = st.columns(2)
-with col1: 
+with col1:
     city_input = st.text_input("Add a city", "")
 with col2:
     if st.button("Add to Favorites") and city_input.strip():
         st.session_state.favorite_cities.append(city_input.strip())
 if st.session_state.favorite_cities:
     st.write(", ".join(st.session_state.favorite_cities))
-
