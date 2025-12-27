@@ -3,6 +3,8 @@ import requests
 import pandas as pd
 from datetime import datetime
 import time
+import os
+import json
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -14,12 +16,35 @@ st.set_page_config(
 st.session_state.setdefault("ui_mode", "Laptop")
 st.session_state.setdefault("continent", "Asia")
 st.session_state.setdefault("city", "Colombo, Sri Lanka")
-st.session_state.setdefault("unit", "Celsius")  # New: Temperature Unit
+st.session_state.setdefault("unit", "Celsius")  # Temperature Unit
 st.session_state.setdefault("show_hourly", True)
 st.session_state.setdefault("show_daily", True)
 st.session_state.setdefault("splash_done", False)
 st.session_state.setdefault("last_ui_mode", st.session_state.ui_mode)
 st.session_state.setdefault("favorite_cities", [])
+
+# ---------------- FAVORITES PERSISTENCE ----------------
+FAV_FILE = "favorites.json"
+
+def load_favorites():
+    if os.path.exists(FAV_FILE):
+        try:
+            with open(FAV_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_favorites(favs):
+    try:
+        with open(FAV_FILE, "w", encoding="utf-8") as f:
+            json.dump(favs, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+# initialize persisted favorites if any
+if not st.session_state.favorite_cities:
+    st.session_state.favorite_cities = load_favorites()
 
 # ---------------- SPLASH SCREEN ----------------
 def show_splash():
@@ -87,10 +112,22 @@ unit = st.sidebar.radio("Select Unit", ["Celsius", "Fahrenheit"], index=["Celsiu
 st.session_state.unit = unit
 
 def convert_temp(celsius):
+    if celsius is None:
+        return None
     if st.session_state.unit == "Celsius":
-        return celsius
+        return round(celsius, 1)
     else:
         return round((celsius * 9/5) + 32, 1)
+
+def convert_wind_kmh(kmh):
+    if kmh is None:
+        return None
+    if st.session_state.unit == "Celsius":
+        return round(kmh, 1)  # keep km/h
+    else:
+        # show mph when Fahrenheit selected
+        mph = kmh * 0.621371
+        return round(mph, 1)
 
 # ---------------- CONTINENTS ----------------
 continents = {
@@ -119,12 +156,13 @@ if show_sidebar:
         index=safe_city_index(st.session_state.city, cities)
     )
     st.sidebar.subheader("⭐ Favorite Cities")
-    col1, col2 = st.columns(2)
+    col1, col2 = st.sidebar.columns(2)
     with col1:
         city_input = st.sidebar.text_input("Add a city", "")
     with col2:
         if st.sidebar.button("Add to Favorites") and city_input.strip():
             st.session_state.favorite_cities.append(city_input.strip())
+            save_favorites(st.session_state.favorite_cities)
     if st.session_state.favorite_cities:
         st.sidebar.write(", ".join(st.session_state.favorite_cities))
 else:
@@ -153,20 +191,33 @@ else:
     with col2:
         if st.button("Add to Favorites") and city_input.strip():
             st.session_state.favorite_cities.append(city_input.strip())
+            save_favorites(st.session_state.favorite_cities)
     if st.session_state.favorite_cities:
         st.write(", ".join(st.session_state.favorite_cities))
-
 
 # ---------------- COORDINATES ----------------
 if st.session_state.city == "Custom Coordinates":
     lat = st.number_input("Latitude", value=0.0, format="%.6f")
     lon = st.number_input("Longitude", value=0.0, format="%.6f")
+    # validate ranges
+    if lat < -90 or lat > 90 or lon < -180 or lon > 180:
+        st.warning("⚠ Please enter valid coordinates: latitude between -90 and 90, longitude between -180 and 180.")
+        st.stop()
 else:
     lat, lon = continents[st.session_state.continent][st.session_state.city]
 
-if lat == 0.0 and lon == 0.0:
+if lat == 0.0 and lon == 0.0 and st.session_state.city == "Custom Coordinates":
     st.warning("⚠ Please select valid coordinates or city.")
     st.stop()
+
+# ---------------- SAFE HELPER ----------------
+def safe(lst, i=0, d=0):
+    try:
+        if lst is None:
+            return d
+        return lst[i]
+    except Exception:
+        return d
 
 # ---------------- WEATHER API ----------------
 @st.cache_data(ttl=600)
@@ -176,73 +227,121 @@ def fetch_weather(lat, lon):
         "current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m,relativehumidity_2m&"
         "daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum&timezone=auto"
     )
-    return requests.get(url, timeout=10).json()
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        # return empty dict on failure; caller will handle
+        return {}
 
+# Fetch with spinner and error handling
 with st.spinner("🌦 Fetching weather data..."):
     data = fetch_weather(lat, lon)
+
+if not data:
+    st.error("Failed to fetch weather data. Please check your internet connection or try again later.")
+    st.stop()
 
 curr = data.get("current_weather", {})
 hourly = data.get("hourly", {})
 daily = data.get("daily", {})
 
-# ---------------- SAFE HELPER ----------------
-def safe(lst, i=0, d=0):
-    try: return lst[i]
-    except: return d
-
 # ---------------- METRICS ----------------
-temperature_c = curr.get("temperature")
+temperature_c = curr.get("temperature") if curr else None
 temperature = convert_temp(temperature_c)
-wind = curr.get("windspeed")
-rain_now = safe(hourly.get("precipitation"))
-uv_today = safe(daily.get("uv_index_max"))
+wind_kmh = curr.get("windspeed") if curr else None
+wind_display = convert_wind_kmh(wind_kmh)
+rain_now = safe(hourly.get("precipitation"), 0, 0)
+uv_today = safe(daily.get("uv_index_max"), 0, 0)
 
-st.info("🧠 AI Weather Summary: " + ("🌧 Rain expected. " if rain_now>0 else "☀️ No rain. ") + ("🔥 Hot. " if temperature_c and temperature_c>30 else ""))
+# AI-like summary (simple)
+summary_parts = []
+if rain_now > 0:
+    summary_parts.append("🌧 Rain expected.")
+else:
+    summary_parts.append("☀️ No rain.")
+if temperature_c is not None and temperature_c > 30:
+    summary_parts.append("🔥 Hot.")
+st.info("🧠 AI Weather Summary: " + " ".join(summary_parts))
 
 st.subheader("🌟 Current Weather")
 c1, c2, c3, c4 = st.columns(4)
-unit_symbol = "°C" if st.session_state.unit=="Celsius" else "°F"
-c1.metric("🌡 Temp", f"{temperature} {unit_symbol}")
-c2.metric("💨 Wind", f"{wind} km/h")
-c3.metric("💧 Humidity", f"{safe(hourly.get('relativehumidity_2m'))}%")
+unit_symbol = "°C" if st.session_state.unit == "Celsius" else "°F"
+wind_unit = "km/h" if st.session_state.unit == "Celsius" else "mph"
+
+c1.metric("🌡 Temp", f"{temperature if temperature is not None else 'N/A'} {unit_symbol}")
+c2.metric("💨 Wind", f"{wind_display if wind_display is not None else 'N/A'} {wind_unit}")
+c3.metric("💧 Humidity", f"{safe(hourly.get('relativehumidity_2m'), 0, 'N/A')}%")
 c4.metric("🌧 Rain", f"{rain_now} mm")
 
 # ---------------- CLOTHING ----------------
 st.subheader("👕 Clothing Recommendation")
 clothing = []
-if temperature_c >= 32: clothing.append("🩳 Light clothing")
-elif temperature_c >= 22: clothing.append("👕 Comfortable wear")
-else: clothing.append("🧥 Jacket recommended")
-if rain_now > 1: clothing.append("☔ Umbrella")
-if wind > 25: clothing.append("🧢 Windbreaker")
-if uv_today > 7: clothing.append("🕶 Sunscreen")
+if temperature_c is None:
+    clothing.append("No temperature data available")
+else:
+    if temperature_c >= 32:
+        clothing.append("🩳 Light clothing")
+    elif temperature_c >= 22:
+        clothing.append("👕 Comfortable wear")
+    else:
+        clothing.append("🧥 Jacket recommended")
+if rain_now > 1:
+    clothing.append("☔ Umbrella")
+if wind_kmh and wind_kmh > 25:
+    clothing.append("🧢 Windbreaker")
+if uv_today and uv_today > 7:
+    clothing.append("🕶 Sunscreen")
 st.success(" • ".join(clothing))
 
 # ---------------- PRECIPITATION ----------------
 st.subheader("🌧 Precipitation Details")
-rain_today = safe(daily.get("precipitation_sum", []))
+rain_today = safe(daily.get("precipitation_sum", []), 0, 0)
 p1, p2, p3 = st.columns(3)
 p1.metric("Now", f"{rain_now} mm")
 p2.metric("Today", f"{rain_today} mm")
-if rain_now==0: intensity="☀️ No Rain"
-elif rain_now<1: intensity="🌦 Light"
-elif rain_now<5: intensity="🌧 Moderate"
-else: intensity="⛈ Heavy"
+if rain_now == 0:
+    intensity = "☀️ No Rain"
+elif rain_now < 1:
+    intensity = "🌦 Light"
+elif rain_now < 5:
+    intensity = "🌧 Moderate"
+else:
+    intensity = "⛈ Heavy"
 p3.metric("Intensity", intensity)
 
 # ---------------- DATAFRAMES ----------------
-hourly_df = pd.DataFrame({
-    "Time": pd.to_datetime(hourly.get("time", [])),
-    "Temp": [convert_temp(t) for t in hourly.get("temperature_2m", [])],
-    "Rain": hourly.get("precipitation", []),
-    "Wind": hourly.get("wind_speed_10m", [])
-})
-daily_df = pd.DataFrame({
-    "Date": pd.to_datetime(daily.get("time", [])),
-    "Min Temp": [convert_temp(t) for t in daily.get("temperature_2m_min", [])],
-    "Max Temp": [convert_temp(t) for t in daily.get("temperature_2m_max", [])],
-    "UV": daily.get("uv_index_max", [])
-})
+hourly_times = hourly.get("time", []) or []
+hourly_temps = hourly.get("temperature_2m", []) or []
+hourly_rain = hourly.get("precipitation", []) or []
+hourly_wind = hourly.get("wind_speed_10m", []) or []
+
+# Build hourly dataframe safely
+try:
+    hourly_df = pd.DataFrame({
+        "Time": pd.to_datetime(hourly_times),
+        "Temp": [convert_temp(t) if t is not None else None for t in hourly_temps],
+        "Rain": hourly_rain,
+        "Wind": [convert_wind_kmh(w) if w is not None else None for w in hourly_wind]
+    })
+except Exception:
+    hourly_df = pd.DataFrame(columns=["Time", "Temp", "Rain", "Wind"])
+
+daily_times = daily.get("time", []) or []
+daily_min = daily.get("temperature_2m_min", []) or []
+daily_max = daily.get("temperature_2m_max", []) or []
+daily_uv = daily.get("uv_index_max", []) or []
+
+try:
+    daily_df = pd.DataFrame({
+        "Date": pd.to_datetime(daily_times),
+        "Min Temp": [convert_temp(t) if t is not None else None for t in daily_min],
+        "Max Temp": [convert_temp(t) if t is not None else None for t in daily_max],
+        "UV": daily_uv
+    })
+except Exception:
+    daily_df = pd.DataFrame(columns=["Date", "Min Temp", "Max Temp", "UV"])
 
 # ---------------- CHART TOGGLES ----------------
 if show_sidebar:
@@ -257,26 +356,31 @@ tab1, tab2, tab3 = st.tabs(["📊 Hourly Charts","📅 Daily Charts","⚠ Alerts
 
 with tab1:
     st.subheader("📊 Hourly Temperature")
-    if st.session_state.show_charts_on:
+    if st.session_state.show_charts_on and not hourly_df.empty:
         st.line_chart(hourly_df.set_index("Time")[["Temp"]])
         st.subheader("🌧 Hourly Rainfall")
         st.bar_chart(hourly_df.set_index("Time")[["Rain"]])
-        st.subheader("💨 Hourly Wind Speed")
+        st.subheader(f"💨 Hourly Wind Speed ({wind_unit})")
         st.line_chart(hourly_df.set_index("Time")[["Wind"]])
-    else: st.info("Hourly charts are hidden")
+    else:
+        st.info("Hourly charts are hidden or no hourly data available")
 
 with tab2:
     st.subheader("📅 Daily Temperature")
-    if st.session_state.show_charts_on:
+    if st.session_state.show_charts_on and not daily_df.empty:
         st.area_chart(daily_df.set_index("Date")[["Min Temp","Max Temp"]])
         st.subheader("☀️ Daily UV Index")
         st.bar_chart(daily_df.set_index("Date")[["UV"]])
-    else: st.info("Daily charts are hidden")
+    else:
+        st.info("Daily charts are hidden or no daily data available")
 
 with tab3:
-    if uv_today>7: st.warning("☀️ High UV today")
-    if temperature_c>35: st.warning("🔥 Extreme heat")
-    if wind>30: st.warning("💨 Strong winds")
+    if uv_today and uv_today > 7:
+        st.warning("☀️ High UV today")
+    if temperature_c and temperature_c > 35:
+        st.warning("🔥 Extreme heat")
+    if wind_kmh and wind_kmh > 30:
+        st.warning("💨 Strong winds")
     st.markdown("### 💡 Tips")
     st.write("- Stay hydrated")
     st.write("- Dress smart")
@@ -290,5 +394,6 @@ with col1:
 with col2:
     if st.button("Add to Favorites") and city_input.strip():
         st.session_state.favorite_cities.append(city_input.strip())
+        save_favorites(st.session_state.favorite_cities)
 if st.session_state.favorite_cities:
     st.write(", ".join(st.session_state.favorite_cities))
