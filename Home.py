@@ -16,12 +16,14 @@ st.set_page_config(
 st.session_state.setdefault("ui_mode", "Laptop")
 st.session_state.setdefault("continent", "Asia")
 st.session_state.setdefault("city", "Colombo, Sri Lanka")
-st.session_state.setdefault("unit", "Celsius")  # Temperature Unit
+st.session_state.setdefault("unit", "Celsius")   # Temperature Unit
+st.session_state.setdefault("wind_unit", "km/h") # Wind Speed Unit (separate)
 st.session_state.setdefault("show_hourly", True)
 st.session_state.setdefault("show_daily", True)
 st.session_state.setdefault("splash_done", False)
 st.session_state.setdefault("last_ui_mode", st.session_state.ui_mode)
 st.session_state.setdefault("favorite_cities", [])
+st.session_state.setdefault("show_charts_on", True)
 
 # ---------------- FAVORITES PERSISTENCE ----------------
 FAV_FILE = "favorites.json"
@@ -90,7 +92,7 @@ if not st.session_state.splash_done or st.session_state.ui_mode != st.session_st
 st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
 st.markdown("---")
-st.caption("Version 1.2")
+st.caption("Version 1.2.2")
 
 # ---------------- UI MODE ----------------
 st.sidebar.markdown("### 📱 UI Mode")
@@ -108,7 +110,11 @@ show_sidebar = st.session_state.ui_mode == "Laptop"
 
 # ---------------- TEMPERATURE UNIT ----------------
 st.sidebar.markdown("### 🌡 Temperature Unit")
-unit = st.sidebar.radio("Select Unit", ["Celsius", "Fahrenheit"], index=["Celsius","Fahrenheit"].index(st.session_state.unit))
+unit = st.sidebar.radio(
+    "Select Unit",
+    ["Celsius", "Fahrenheit"],
+    index=["Celsius","Fahrenheit"].index(st.session_state.unit)
+)
 st.session_state.unit = unit
 
 def convert_temp(celsius):
@@ -119,23 +125,50 @@ def convert_temp(celsius):
     else:
         return round((celsius * 9/5) + 32, 1)
 
-def convert_wind_kmh(kmh):
+# ---------------- WIND SPEED UNIT (SEPARATE) ----------------
+st.sidebar.markdown("### 💨 Wind Speed Unit")
+wind_unit_choice = st.sidebar.radio(
+    "Select Wind Speed Unit",
+    ["km/h", "mph"],
+    index=["km/h","mph"].index(st.session_state.wind_unit)
+)
+st.session_state.wind_unit = wind_unit_choice
+
+def convert_wind(kmh):
     if kmh is None:
         return None
-    if st.session_state.unit == "Celsius":
-        return round(kmh, 1)  # keep km/h
+    if st.session_state.wind_unit == "km/h":
+        return round(kmh, 1)
     else:
-        # show mph when Fahrenheit selected
-        mph = kmh * 0.621371
-        return round(mph, 1)
+        return round(kmh * 0.621371, 1)
+
+# ---------------- REFRESH BUTTON ----------------
+if st.sidebar.button("🔄 Refresh Weather Data"):
+    st.cache_data.clear()
+    st.rerun()
 
 # ---------------- CONTINENTS ----------------
 continents = {
     "Custom Coordinates": {"Custom Coordinates": (0.0, 0.0)},
-    "North America": {"New York, USA": (40.7128, -74.0060), "Toronto, Canada": (43.6532, -79.3832), "Los Angeles, USA": (34.0522, -118.2437)},
-    "Europe": {"London, UK": (51.5074, -0.1278), "Berlin, Germany": (52.52, 13.41), "Paris, France": (48.8566, 2.3522)},
-    "Asia": {"Tokyo, Japan": (35.6895, 139.6917), "Delhi, India": (28.6139, 77.2090), "Colombo, Sri Lanka": (6.9271, 79.8612)},
-    "Africa": {"Cairo, Egypt": (30.0444, 31.2357), "Lagos, Nigeria": (6.5244, 3.3792)}
+    "North America": {
+        "New York, USA": (40.7128, -74.0060),
+        "Toronto, Canada": (43.6532, -79.3832),
+        "Los Angeles, USA": (34.0522, -118.2437)
+    },
+    "Europe": {
+        "London, UK": (51.5074, -0.1278),
+        "Berlin, Germany": (52.52, 13.41),
+        "Paris, France": (48.8566, 2.3522)
+    },
+    "Asia": {
+        "Tokyo, Japan": (35.6895, 139.6917),
+        "Delhi, India": (28.6139, 77.2090),
+        "Colombo, Sri Lanka": (6.9271, 79.8612)
+    },
+    "Africa": {
+        "Cairo, Egypt": (30.0444, 31.2357),
+        "Lagos, Nigeria": (6.5244, 3.3792)
+    }
 }
 
 # ---------------- LOCATION SELECT ----------------
@@ -164,6 +197,11 @@ if show_sidebar:
             st.session_state.favorite_cities.append(city_input.strip())
             save_favorites(st.session_state.favorite_cities)
     if st.session_state.favorite_cities:
+        # simple remove UI (comma-separated with remove box)
+        remove_city = st.sidebar.selectbox("Remove favorite", [""] + st.session_state.favorite_cities)
+        if st.sidebar.button("Remove") and remove_city:
+            st.session_state.favorite_cities = [c for c in st.session_state.favorite_cities if c != remove_city]
+            save_favorites(st.session_state.favorite_cities)
         st.sidebar.write(", ".join(st.session_state.favorite_cities))
 else:
     st.subheader("🌍 Location")
@@ -193,6 +231,13 @@ else:
             st.session_state.favorite_cities.append(city_input.strip())
             save_favorites(st.session_state.favorite_cities)
     if st.session_state.favorite_cities:
+        # simple remove UI in main view
+        remove_city = st.selectbox("Remove favorite", [""] + st.session_state.favorite_cities)
+        rc1, rc2 = st.columns([1,1])
+        with rc2:
+            if st.button("Remove") and remove_city:
+                st.session_state.favorite_cities = [c for c in st.session_state.favorite_cities if c != remove_city]
+                save_favorites(st.session_state.favorite_cities)
         st.write(", ".join(st.session_state.favorite_cities))
 
 # ---------------- COORDINATES ----------------
@@ -251,7 +296,7 @@ daily = data.get("daily", {})
 temperature_c = curr.get("temperature") if curr else None
 temperature = convert_temp(temperature_c)
 wind_kmh = curr.get("windspeed") if curr else None
-wind_display = convert_wind_kmh(wind_kmh)
+wind_display = convert_wind(wind_kmh)
 rain_now = safe(hourly.get("precipitation"), 0, 0)
 uv_today = safe(daily.get("uv_index_max"), 0, 0)
 
@@ -268,10 +313,10 @@ st.info("🧠 AI Weather Summary: " + " ".join(summary_parts))
 st.subheader("🌟 Current Weather")
 c1, c2, c3, c4 = st.columns(4)
 unit_symbol = "°C" if st.session_state.unit == "Celsius" else "°F"
-wind_unit = "km/h" if st.session_state.unit == "Celsius" else "mph"
+wind_symbol = st.session_state.wind_unit
 
 c1.metric("🌡 Temp", f"{temperature if temperature is not None else 'N/A'} {unit_symbol}")
-c2.metric("💨 Wind", f"{wind_display if wind_display is not None else 'N/A'} {wind_unit}")
+c2.metric("💨 Wind", f"{wind_display if wind_display is not None else 'N/A'} {wind_symbol}")
 c3.metric("💧 Humidity", f"{safe(hourly.get('relativehumidity_2m'), 0, 'N/A')}%")
 c4.metric("🌧 Rain", f"{rain_now} mm")
 
@@ -323,7 +368,7 @@ try:
         "Time": pd.to_datetime(hourly_times),
         "Temp": [convert_temp(t) if t is not None else None for t in hourly_temps],
         "Rain": hourly_rain,
-        "Wind": [convert_wind_kmh(w) if w is not None else None for w in hourly_wind]
+        "Wind": [convert_wind(w) if w is not None else None for w in hourly_wind]
     })
 except Exception:
     hourly_df = pd.DataFrame(columns=["Time", "Temp", "Rain", "Wind"])
@@ -346,10 +391,10 @@ except Exception:
 # ---------------- CHART TOGGLES ----------------
 if show_sidebar:
     st.sidebar.markdown("### 📊 Chart Controls")
-    st.session_state.show_charts_on = st.sidebar.checkbox("Show Charts", value=True)
+    st.session_state.show_charts_on = st.sidebar.checkbox("Show Charts", value=st.session_state.show_charts_on)
 else:
     with st.expander("📊 Chart Controls"):
-        st.session_state.show_charts_on = st.checkbox("Show Charts", value=True)
+        st.session_state.show_charts_on = st.checkbox("Show Charts", value=st.session_state.show_charts_on)
 
 # ---------------- TABS ----------------
 tab1, tab2, tab3 = st.tabs(["📊 Hourly Charts","📅 Daily Charts","⚠ Alerts & Tips"])
@@ -360,8 +405,17 @@ with tab1:
         st.line_chart(hourly_df.set_index("Time")[["Temp"]])
         st.subheader("🌧 Hourly Rainfall")
         st.bar_chart(hourly_df.set_index("Time")[["Rain"]])
-        st.subheader(f"💨 Hourly Wind Speed ({wind_unit})")
+        st.subheader(f"💨 Hourly Wind Speed ({wind_symbol})")
         st.line_chart(hourly_df.set_index("Time")[["Wind"]])
+        st.subheader("📋 Hourly Data")
+        st.dataframe(hourly_df, use_container_width=True)
+        # Export button
+        st.download_button(
+            "⬇ Download Hourly Data (CSV)",
+            hourly_df.to_csv(index=False).encode("utf-8"),
+            "hourly_weather.csv",
+            "text/csv"
+        )
     else:
         st.info("Hourly charts are hidden or no hourly data available")
 
@@ -371,6 +425,15 @@ with tab2:
         st.area_chart(daily_df.set_index("Date")[["Min Temp","Max Temp"]])
         st.subheader("☀️ Daily UV Index")
         st.bar_chart(daily_df.set_index("Date")[["UV"]])
+        st.subheader("📋 Daily Data")
+        st.dataframe(daily_df, use_container_width=True)
+        # Export button
+        st.download_button(
+            "⬇ Download Daily Data (CSV)",
+            daily_df.to_csv(index=False).encode("utf-8"),
+            "daily_weather.csv",
+            "text/csv"
+        )
     else:
         st.info("Daily charts are hidden or no daily data available")
 
@@ -386,7 +449,7 @@ with tab3:
     st.write("- Dress smart")
     st.write("- Check updates hourly")
 
-# ---------------- FAVORITE CITIES ----------------
+# ---------------- FAVORITE CITIES (main section) ----------------
 st.subheader("⭐ Favorite Cities")
 col1, col2 = st.columns(2)
 with col1:
