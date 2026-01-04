@@ -24,6 +24,7 @@ st.session_state.setdefault("show_charts_on", True)
 st.session_state.setdefault("compact_mode", False)
 st.session_state.setdefault("confirm_clear_favs", False)
 st.session_state.setdefault("last_fetch_time", None)
+st.session_state.setdefault("theme", "light")  # "light" or "dark"
 
 # ---------------- FAVORITES PERSISTENCE ----------------
 FAV_FILE = "favorites.json"
@@ -91,13 +92,11 @@ def move_favorite(idx, direction):
     save_favorites(favs)
 
 def go_to_favorite(city_label):
-    # Try to find the city in the continents mapping and set it
     for cont, cities in continents.items():
         if city_label in cities:
             st.session_state.continent = cont
             st.session_state.city = city_label
             st.experimental_rerun()
-    # If not found, inform user
     st.info("Favorite not in built-in list. Select it manually or add coordinates.")
 
 def format_age(ts):
@@ -109,6 +108,43 @@ def format_age(ts):
     if age_seconds < 3600:
         return f"{age_seconds//60}m"
     return f"{age_seconds//3600}h"
+
+# ---------------- THEME CSS ----------------
+LIGHT_CSS = """
+:root{
+  --bg:#FFFFFF;
+  --text:#0f1720;
+  --muted:#6b7280;
+  --card:#f8fafc;
+  --accent:#0ea5a4;
+  --metric-bg: rgba(14,165,164,0.06);
+}
+.stApp, .main, .block-container { background: var(--bg) !important; color: var(--text) !important; }
+.css-1d391kg { background: var(--bg) !important; }
+[data-testid="stMetricValue"] { color: var(--text) !important; }
+.metric-label { color: var(--muted) !important; }
+.stButton>button { background-color: var(--accent) !important; color: white !important; }
+"""
+
+DARK_CSS = """
+:root{
+  --bg:#0b1220;
+  --text:#e6eef6;
+  --muted:#9aa6b2;
+  --card:#0f1724;
+  --accent:#06b6d4;
+  --metric-bg: rgba(6,182,212,0.06);
+}
+.stApp, .main, .block-container { background: var(--bg) !important; color: var(--text) !important; }
+.css-1d391kg { background: var(--bg) !important; }
+[data-testid="stMetricValue"] { color: var(--text) !important; }
+.metric-label { color: var(--muted) !important; }
+.stButton>button { background-color: var(--accent) !important; color: black !important; }
+"""
+
+def apply_theme_css():
+    css = DARK_CSS if st.session_state.theme == "dark" else LIGHT_CSS
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 # ---------------- SPLASH ----------------
 def show_splash():
@@ -132,10 +168,11 @@ if not st.session_state.splash_done or st.session_state.ui_mode != st.session_st
     st.session_state.last_ui_mode = st.session_state.ui_mode
 
 # ---------------- HEADER ----------------
+apply_theme_css()
 st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
 st.markdown("---")
-st.caption("Version 1.2.2.2")
+st.caption("Version 1.2.2.3")
 
 # ---------------- SIDEBAR CONTROLS ----------------
 st.sidebar.markdown("### 📱 UI Mode")
@@ -157,6 +194,12 @@ st.sidebar.markdown("### 💨 Wind Speed Unit")
 wind_unit_choice = st.sidebar.radio("Select Wind Speed Unit", ["km/h", "mph"],
                                     index=["km/h", "mph"].index(st.session_state.wind_unit))
 st.session_state.wind_unit = wind_unit_choice
+
+# Theme toggle
+st.sidebar.markdown("### 🎨 Theme")
+theme_choice = st.sidebar.radio("Color Mode", ["Light", "Dark"], index=0 if st.session_state.theme=="light" else 1)
+st.session_state.theme = "dark" if theme_choice == "Dark" else "light"
+apply_theme_css()
 
 # Compact layout toggle
 st.sidebar.markdown("### 🧭 Display")
@@ -391,7 +434,6 @@ def fetch_weather(lat, lon):
 
 with st.spinner("🌦 Fetching weather data..."):
     data = fetch_weather(lat, lon)
-    # record fetch time (UTC) for cache/age display
     st.session_state.last_fetch_time = datetime.now(timezone.utc)
 
 if not data:
