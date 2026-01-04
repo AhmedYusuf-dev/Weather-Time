@@ -1,20 +1,27 @@
+# Home.py v1.2.3
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, timezone
-import time
-import os
 import json
+import os
+import time
+from datetime import datetime, timezone
+import difflib
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Weather Time", layout="wide")
+
+# ---------------- FILES ----------------
+FAV_FILE = "favorites.json"
+PREF_FILE = "prefs.json"
+LAST_DATA_FILE = "last_data.json"
 
 # ---------------- SESSION STATE INIT ----------------
 st.session_state.setdefault("ui_mode", "Laptop")
 st.session_state.setdefault("continent", "Asia")
 st.session_state.setdefault("city", "Colombo, Sri Lanka")
-st.session_state.setdefault("unit", "Celsius")       # Temperature Unit
-st.session_state.setdefault("wind_unit", "km/h")     # Wind Speed Unit
+st.session_state.setdefault("unit", "Celsius")
+st.session_state.setdefault("wind_unit", "km/h")
 st.session_state.setdefault("show_hourly", True)
 st.session_state.setdefault("show_daily", True)
 st.session_state.setdefault("splash_done", False)
@@ -24,29 +31,89 @@ st.session_state.setdefault("show_charts_on", True)
 st.session_state.setdefault("compact_mode", False)
 st.session_state.setdefault("confirm_clear_favs", False)
 st.session_state.setdefault("last_fetch_time", None)
-st.session_state.setdefault("theme", "light")  # "light" or "dark"
+st.session_state.setdefault("theme", "light")
+st.session_state.setdefault("prefs_loaded", False)
 
-# ---------------- FAVORITES PERSISTENCE ----------------
-FAV_FILE = "favorites.json"
-
-def load_favorites():
-    if os.path.exists(FAV_FILE):
-        try:
-            with open(FAV_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
-
-def save_favorites(favs):
+# ---------------- UTILITIES ----------------
+def load_json_safe(path):
     try:
-        with open(FAV_FILE, "w", encoding="utf-8") as f:
-            json.dump(favs, f, ensure_ascii=False, indent=2)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        return None
+    return None
+
+def save_json_safe(path, obj):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 
+# ---------------- PREFERENCES PERSISTENCE ----------------
+def load_prefs():
+    prefs = load_json_safe(PREF_FILE) or {}
+    # apply prefs to session_state
+    st.session_state.theme = prefs.get("theme", st.session_state.theme)
+    st.session_state.unit = prefs.get("unit", st.session_state.unit)
+    st.session_state.wind_unit = prefs.get("wind_unit", st.session_state.wind_unit)
+    st.session_state.compact_mode = prefs.get("compact_mode", st.session_state.compact_mode)
+    last_city = prefs.get("last_city")
+    if last_city:
+        # if last_city exists in favorites or mapping, set it later after mapping load
+        st.session_state.setdefault("last_city_pref", last_city)
+    st.session_state.prefs_loaded = True
+
+def save_prefs():
+    prefs = {
+        "theme": st.session_state.theme,
+        "unit": st.session_state.unit,
+        "wind_unit": st.session_state.wind_unit,
+        "compact_mode": st.session_state.compact_mode,
+        "last_city": st.session_state.get("last_city_pref", None)
+    }
+    save_json_safe(PREF_FILE, prefs)
+
+# ---------------- FAVORITES PERSISTENCE ----------------
+def load_favorites():
+    favs = load_json_safe(FAV_FILE)
+    return favs or []
+
+def save_favorites(favs):
+    save_json_safe(FAV_FILE, favs)
+
 if not st.session_state.favorite_cities:
     st.session_state.favorite_cities = load_favorites()
+
+# ---------------- THEME CSS ----------------
+LIGHT_CSS = """
+:root{
+  --bg:#FFFFFF;
+  --text:#0f1720;
+  --muted:#6b7280;
+  --card:#f8fafc;
+  --accent:#0ea5a4;
+}
+.stApp, .main, .block-container { background: var(--bg) !important; color: var(--text) !important; }
+.stButton>button { background-color: var(--accent) !important; color: white !important; }
+"""
+
+DARK_CSS = """
+:root{
+  --bg:#0b1220;
+  --text:#e6eef6;
+  --muted:#9aa6b2;
+  --card:#0f1724;
+  --accent:#06b6d4;
+}
+.stApp, .main, .block-container { background: var(--bg) !important; color: var(--text) !important; }
+.stButton>button { background-color: var(--accent) !important; color: black !important; }
+"""
+
+def apply_theme_css():
+    css = DARK_CSS if st.session_state.theme == "dark" else LIGHT_CSS
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 # ---------------- HELPERS ----------------
 def safe_get(lst, i=0, default=0):
@@ -71,34 +138,6 @@ def convert_wind(kmh):
         return round(kmh, 1)
     return round(kmh * 0.621371, 1)
 
-def add_favorite_safe(city_name):
-    city_name = city_name.strip()
-    if not city_name:
-        return "empty"
-    if city_name in st.session_state.favorite_cities:
-        return "exists"
-    st.session_state.favorite_cities.append(city_name)
-    save_favorites(st.session_state.favorite_cities)
-    return "added"
-
-def move_favorite(idx, direction):
-    favs = st.session_state.favorite_cities
-    if idx < 0 or idx >= len(favs):
-        return
-    new_idx = idx + direction
-    if new_idx < 0 or new_idx >= len(favs):
-        return
-    favs[idx], favs[new_idx] = favs[new_idx], favs[idx]
-    save_favorites(favs)
-
-def go_to_favorite(city_label):
-    for cont, cities in continents.items():
-        if city_label in cities:
-            st.session_state.continent = cont
-            st.session_state.city = city_label
-            st.experimental_rerun()
-    st.info("Favorite not in built-in list. Select it manually or add coordinates.")
-
 def format_age(ts):
     if ts is None:
         return "unknown"
@@ -108,43 +147,6 @@ def format_age(ts):
     if age_seconds < 3600:
         return f"{age_seconds//60}m"
     return f"{age_seconds//3600}h"
-
-# ---------------- THEME CSS ----------------
-LIGHT_CSS = """
-:root{
-  --bg:#FFFFFF;
-  --text:#0f1720;
-  --muted:#6b7280;
-  --card:#f8fafc;
-  --accent:#0ea5a4;
-  --metric-bg: rgba(14,165,164,0.06);
-}
-.stApp, .main, .block-container { background: var(--bg) !important; color: var(--text) !important; }
-.css-1d391kg { background: var(--bg) !important; }
-[data-testid="stMetricValue"] { color: var(--text) !important; }
-.metric-label { color: var(--muted) !important; }
-.stButton>button { background-color: var(--accent) !important; color: white !important; }
-"""
-
-DARK_CSS = """
-:root{
-  --bg:#0b1220;
-  --text:#e6eef6;
-  --muted:#9aa6b2;
-  --card:#0f1724;
-  --accent:#06b6d4;
-  --metric-bg: rgba(6,182,212,0.06);
-}
-.stApp, .main, .block-container { background: var(--bg) !important; color: var(--text) !important; }
-.css-1d391kg { background: var(--bg) !important; }
-[data-testid="stMetricValue"] { color: var(--text) !important; }
-.metric-label { color: var(--muted) !important; }
-.stButton>button { background-color: var(--accent) !important; color: black !important; }
-"""
-
-def apply_theme_css():
-    css = DARK_CSS if st.session_state.theme == "dark" else LIGHT_CSS
-    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 # ---------------- SPLASH ----------------
 def show_splash():
@@ -159,7 +161,7 @@ def show_splash():
     """
     placeholder = st.empty()
     placeholder.markdown(splash_html, unsafe_allow_html=True)
-    time.sleep(1.6)
+    time.sleep(1.2)
     placeholder.empty()
 
 if not st.session_state.splash_done or st.session_state.ui_mode != st.session_state.last_ui_mode:
@@ -168,11 +170,15 @@ if not st.session_state.splash_done or st.session_state.ui_mode != st.session_st
     st.session_state.last_ui_mode = st.session_state.ui_mode
 
 # ---------------- HEADER ----------------
+# load prefs once at startup
+if not st.session_state.prefs_loaded:
+    load_prefs()
+
 apply_theme_css()
 st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
 st.markdown("---")
-st.caption("Version 1.2.2.3")
+st.caption("Version 1.2.3")
 
 # ---------------- SIDEBAR CONTROLS ----------------
 st.sidebar.markdown("### 📱 UI Mode")
@@ -188,23 +194,32 @@ show_sidebar = st.session_state.ui_mode == "Laptop"
 st.sidebar.markdown("### 🌡 Temperature Unit")
 unit_choice = st.sidebar.radio("Select Unit", ["Celsius", "Fahrenheit"],
                                index=["Celsius", "Fahrenheit"].index(st.session_state.unit))
-st.session_state.unit = unit_choice
+if unit_choice != st.session_state.unit:
+    st.session_state.unit = unit_choice
+    save_prefs()
 
 st.sidebar.markdown("### 💨 Wind Speed Unit")
 wind_unit_choice = st.sidebar.radio("Select Wind Speed Unit", ["km/h", "mph"],
                                     index=["km/h", "mph"].index(st.session_state.wind_unit))
-st.session_state.wind_unit = wind_unit_choice
+if wind_unit_choice != st.session_state.wind_unit:
+    st.session_state.wind_unit = wind_unit_choice
+    save_prefs()
 
 # Theme toggle
 st.sidebar.markdown("### 🎨 Theme")
 theme_choice = st.sidebar.radio("Color Mode", ["Light", "Dark"], index=0 if st.session_state.theme=="light" else 1)
-st.session_state.theme = "dark" if theme_choice == "Dark" else "light"
-apply_theme_css()
+new_theme = "dark" if theme_choice == "Dark" else "light"
+if new_theme != st.session_state.theme:
+    st.session_state.theme = new_theme
+    save_prefs()
+    apply_theme_css()
 
 # Compact layout toggle
 st.sidebar.markdown("### 🧭 Display")
 compact_choice = st.sidebar.checkbox("Compact mobile layout", value=st.session_state.compact_mode)
-st.session_state.compact_mode = compact_choice
+if compact_choice != st.session_state.compact_mode:
+    st.session_state.compact_mode = compact_choice
+    save_prefs()
 
 # manual refresh
 if st.sidebar.button("🔄 Refresh Weather Data"):
@@ -215,7 +230,7 @@ if st.sidebar.button("🔄 Refresh Weather Data"):
 if st.sidebar.button("🗑 Clear Favorites (quick)"):
     st.session_state.confirm_clear_favs = True
 
-# ---------------- CONTINENTS & CITIES ----------------
+# ---------------- CONTINENTS & CITIES (sample mapping) ----------------
 continents = {
     "Custom Coordinates": {"Custom Coordinates": (0.0, 0.0)},
     "North America": {
@@ -325,20 +340,26 @@ continents = {
     }
 }
 
+
 def safe_city_index(city, cities_list):
     return cities_list.index(city) if city in cities_list else 0
 
-# Ensure continent has cities and selected city exists
-if st.session_state.continent not in continents:
-    st.session_state.continent = list(continents.keys())[0]
+# build flattened city list for search
+_flat_city_list = []
+for cont, cities in continents.items():
+    for city_name in cities.keys():
+        _flat_city_list.append(city_name)
 
-cities_for_continent = list(continents.get(st.session_state.continent, {}).keys())
-if not cities_for_continent:
-    st.error("No cities available for the selected continent. Please update the continents mapping.")
-    st.stop()
-
-if st.session_state.city not in cities_for_continent:
-    st.session_state.city = cities_for_continent[0]
+# If prefs had last city, try to set it
+if st.session_state.get("last_city_pref"):
+    pref = st.session_state.get("last_city_pref")
+    if pref in _flat_city_list:
+        st.session_state.city = pref
+        # find continent
+        for cont, cities in continents.items():
+            if pref in cities:
+                st.session_state.continent = cont
+                break
 
 # ---------------- LOCATION UI ----------------
 if show_sidebar:
@@ -356,11 +377,13 @@ if show_sidebar:
         fav_input = st.sidebar.text_input("Add a city", "")
     with col2:
         if st.sidebar.button("Add to Favorites") and fav_input.strip():
-            res = add_favorite_safe(fav_input)
-            if res == "exists":
-                st.sidebar.info("City already in favorites")
-            elif res == "added":
-                st.sidebar.success("Added to favorites")
+            new_city = fav_input.strip()
+            if new_city not in st.session_state.favorite_cities:
+                st.session_state.favorite_cities.append(new_city)
+                save_favorites(st.session_state.favorite_cities)
+                st.sidebar.success("Added")
+            else:
+                st.sidebar.info("Already in favorites")
     if st.session_state.favorite_cities:
         remove_city = st.sidebar.selectbox("Remove favorite", [""] + st.session_state.favorite_cities)
         if st.sidebar.button("Remove") and remove_city:
@@ -387,11 +410,13 @@ else:
         fav_input = st.text_input("Add a city", "")
     with col2:
         if st.button("Add to Favorites") and fav_input.strip():
-            res = add_favorite_safe(fav_input)
-            if res == "exists":
-                st.info("City already in favorites")
-            elif res == "added":
-                st.success("Added to favorites")
+            new_city = fav_input.strip()
+            if new_city not in st.session_state.favorite_cities:
+                st.session_state.favorite_cities.append(new_city)
+                save_favorites(st.session_state.favorite_cities)
+                st.success("Added")
+            else:
+                st.info("Already in favorites")
     if st.session_state.favorite_cities:
         remove_city = st.selectbox("Remove favorite", [""] + st.session_state.favorite_cities)
         if st.button("Remove") and remove_city:
@@ -403,21 +428,74 @@ else:
 try:
     lat, lon = continents[st.session_state.continent][st.session_state.city]
 except Exception:
-    st.error("Selected city not found in mapping. Please choose another city.")
-    st.stop()
+    lat, lon = (0.0, 0.0)
 
 if st.session_state.city == "Custom Coordinates":
     lat = st.number_input("Latitude", value=lat if lat is not None else 0.0, format="%.6f")
     lon = st.number_input("Longitude", value=lon if lon is not None else 0.0, format="%.6f")
     if lat < -90 or lat > 90 or lon < -180 or lon > 180:
-        st.warning("⚠ Please enter valid coordinates: latitude between -90 and 90, longitude between -180 and 180.")
+        st.warning("⚠ Please enter valid coordinates.")
         st.stop()
 
-if st.session_state.city == "Custom Coordinates" and lat == 0.0 and lon == 0.0:
-    st.warning("⚠ Please enter custom coordinates or choose a city.")
-    st.stop()
+# ---------------- SEARCHABLE CITY LOOKUP ----------------
+st.markdown("### 🔎 Quick city search")
+search_input = st.text_input("Type a city name (fuzzy search)", "")
+if search_input:
+    # use difflib to find close matches
+    matches = difflib.get_close_matches(search_input, _flat_city_list, n=10, cutoff=0.4)
+    if matches:
+        sel = st.selectbox("Matches", [""] + matches)
+        if sel:
+            # set continent and city
+            for cont, cities in continents.items():
+                if sel in cities:
+                    st.session_state.continent = cont
+                    st.session_state.city = sel
+                    st.session_state.last_city_pref = sel
+                    save_prefs()
+                    st.experimental_rerun()
+    else:
+        st.info("No close matches found. Try a different spelling or add custom coordinates.")
 
-# ---------------- WEATHER API ----------------
+# ---------------- MAP DISPLAY ----------------
+# Build map DataFrame without using deprecated .append()
+records = []
+
+# selected city (only add if lat/lon are valid numbers)
+try:
+    sel_lat = float(lat)
+    sel_lon = float(lon)
+    records.append({"lat": sel_lat, "lon": sel_lon, "name": st.session_state.city})
+except Exception:
+    pass
+
+# favorites that exist in mapping
+for fav in st.session_state.favorite_cities:
+    for cont, cities in continents.items():
+        if fav in cities:
+            f_lat, f_lon = cities[fav]
+            try:
+                records.append({"lat": float(f_lat), "lon": float(f_lon), "name": fav})
+            except Exception:
+                continue
+
+# create DataFrame once
+if records:
+    map_df = pd.DataFrame.from_records(records, columns=["lat", "lon", "name"])
+    # ensure numeric and drop invalid rows
+    map_df["lat"] = pd.to_numeric(map_df["lat"], errors="coerce")
+    map_df["lon"] = pd.to_numeric(map_df["lon"], errors="coerce")
+    map_df = map_df.dropna(subset=["lat", "lon"])
+else:
+    map_df = pd.DataFrame(columns=["lat", "lon", "name"])
+
+# render map if we have valid points
+if not map_df.empty:
+    st.map(map_df[["lat", "lon"]])
+else:
+    st.info("No valid coordinates to display on the map.")
+
+# ---------------- WEATHER API with OFFLINE FALLBACK ----------------
 @st.cache_data(ttl=600)
 def fetch_weather(lat, lon):
     url = (
@@ -434,14 +512,27 @@ def fetch_weather(lat, lon):
 
 with st.spinner("🌦 Fetching weather data..."):
     data = fetch_weather(lat, lon)
-    st.session_state.last_fetch_time = datetime.now(timezone.utc)
-
-if not data:
-    st.error("Failed to fetch weather data. Please check your internet connection or try again later.")
-    st.stop()
+    if data:
+        # save last known good data
+        save_json_safe(LAST_DATA_FILE, {"fetched_at": datetime.now(timezone.utc).isoformat(), "lat": lat, "lon": lon, "data": data})
+        st.session_state.last_fetch_time = datetime.now(timezone.utc)
+    else:
+        # try offline fallback
+        last = load_json_safe(LAST_DATA_FILE)
+        if last and "data" in last:
+            data = last["data"]
+            # set last_fetch_time from saved timestamp if available
+            try:
+                st.session_state.last_fetch_time = datetime.fromisoformat(last.get("fetched_at")).astimezone(timezone.utc)
+            except Exception:
+                st.session_state.last_fetch_time = None
+            st.warning("Using last known data (offline fallback). Some values may be stale.")
+        else:
+            st.error("Failed to fetch weather data and no cached data available.")
+            st.stop()
 
 # ---------------- LAST UPDATED & CACHE INFO ----------------
-CACHE_TTL_SECONDS = 600  # must match @st.cache_data(ttl=600)
+CACHE_TTL_SECONDS = 600
 age_display = format_age(st.session_state.get("last_fetch_time"))
 remaining = max(0, CACHE_TTL_SECONDS - int((datetime.now(timezone.utc) - st.session_state.get("last_fetch_time")).total_seconds())) if st.session_state.get("last_fetch_time") else 0
 cache_hint = f"🔁 Cached (expires in {remaining//60}m {remaining%60}s)" if remaining > 0 else "🔁 Cache expired / fresh fetch"
@@ -500,7 +591,7 @@ hourly_humidity_val = safe_get(hourly_humidity, 0, 'N/A')
 unit_symbol = "°C" if st.session_state.unit == "Celsius" else "°F"
 wind_symbol = st.session_state.wind_unit
 
-# ---------------- METRICS DISPLAY (compact vs full) ----------------
+# ---------------- METRICS DISPLAY ----------------
 if st.session_state.compact_mode:
     cols = st.columns([1,1,1,1])
     cols[0].metric("🌡", f"{temperature if temperature is not None else 'N/A'}{unit_symbol}")
@@ -641,11 +732,13 @@ with col1:
     main_fav_input = st.text_input("Add a city", "")
 with col2:
     if st.button("Add to Favorites") and main_fav_input.strip():
-        res = add_favorite_safe(main_fav_input)
-        if res == "exists":
-            st.info("City already in favorites")
-        elif res == "added":
-            st.success("Added to favorites")
+        new_city = main_fav_input.strip()
+        if new_city not in st.session_state.favorite_cities:
+            st.session_state.favorite_cities.append(new_city)
+            save_favorites(st.session_state.favorite_cities)
+            st.success("Added")
+        else:
+            st.info("Already in favorites")
 
 if st.session_state.favorite_cities:
     st.write("Your favorites:")
@@ -653,13 +746,29 @@ if st.session_state.favorite_cities:
         cols = st.columns([4,1,1,1,1])
         cols[0].write(fav)
         if cols[1].button("↑", key=f"fav_up_{i}"):
-            move_favorite(i, -1)
-            st.experimental_rerun()
+            if i > 0:
+                st.session_state.favorite_cities[i-1], st.session_state.favorite_cities[i] = st.session_state.favorite_cities[i], st.session_state.favorite_cities[i-1]
+                save_favorites(st.session_state.favorite_cities)
+                st.experimental_rerun()
         if cols[2].button("↓", key=f"fav_down_{i}"):
-            move_favorite(i, +1)
-            st.experimental_rerun()
+            if i < len(st.session_state.favorite_cities)-1:
+                st.session_state.favorite_cities[i+1], st.session_state.favorite_cities[i] = st.session_state.favorite_cities[i], st.session_state.favorite_cities[i+1]
+                save_favorites(st.session_state.favorite_cities)
+                st.experimental_rerun()
         if cols[3].button("Go", key=f"fav_go_{i}"):
-            go_to_favorite(fav)
+            # try to set continent and city
+            found = False
+            for cont, cities in continents.items():
+                if fav in cities:
+                    st.session_state.continent = cont
+                    st.session_state.city = fav
+                    st.session_state.last_city_pref = fav
+                    save_prefs()
+                    st.experimental_rerun()
+                    found = True
+                    break
+            if not found:
+                st.info("Favorite not in built-in list. Select manually or add coordinates.")
         if cols[4].button("Remove", key=f"fav_remove_{i}"):
             st.session_state.favorite_cities = [c for c in st.session_state.favorite_cities if c != fav]
             save_favorites(st.session_state.favorite_cities)
@@ -679,5 +788,17 @@ if st.session_state.favorite_cities:
     else:
         if st.button("🗑 Clear Favorites"):
             st.session_state.confirm_clear_favs = True
+
+# ---------------- SHAREABLE SNAPSHOT ----------------
+st.markdown("### 📤 Share / Export")
+summary = f"{st.session_state.city} — Temp: {temperature if temperature is not None else 'N/A'}{unit_symbol}, Wind: {wind_display if wind_display is not None else 'N/A'}{wind_symbol}, Rain: {rain_now} mm"
+st.write(summary)
+# download text snapshot
+st.download_button("⬇ Download snapshot (text)", summary.encode("utf-8"), file_name="weather_snapshot.txt", mime="text/plain")
+
+# ---------------- SAVE LAST CITY PREF ----------------
+# Save last selected city to prefs for persistence
+st.session_state.last_city_pref = st.session_state.city
+save_prefs()
 
 # ---------------- END ----------------
