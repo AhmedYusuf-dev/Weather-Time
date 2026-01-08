@@ -1,4 +1,16 @@
-# Home.py v1.2.3
+# Home.py v1.2.3.2
+"""
+Weather Time v1.2.3.2
+- Improved error handling and user messages
+- Background/manual refresh controls
+- Favorites import/export and bulk add
+- Rate limiting, retries, exponential backoff
+- Telemetry logging
+- Unique widget keys to avoid duplicate element IDs
+- Safe rerun helper compatible with multiple Streamlit versions
+- Update log / changelog display and export
+"""
+
 import streamlit as st
 import requests
 import pandas as pd
@@ -6,15 +18,32 @@ import json
 import os
 import time
 from datetime import datetime, timezone
-import difflib
+from difflib import SequenceMatcher
+from typing import Tuple, Any, Optional
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Weather Time", layout="wide")
+
+# ---------------- SAFE RERUN HELPER ----------------
+def safe_rerun():
+    try:
+        if hasattr(st, "experimental_rerun"):
+            st.experimental_rerun()
+            return
+    except Exception:
+        pass
+    try:
+        from streamlit.runtime.scriptrunner import RerunException
+        raise RerunException()
+    except Exception:
+        st.session_state["_force_rerun_flag"] = not st.session_state.get("_force_rerun_flag", False)
 
 # ---------------- FILES ----------------
 FAV_FILE = "favorites.json"
 PREF_FILE = "prefs.json"
 LAST_DATA_FILE = "last_data.json"
+TELEMETRY_FILE = "telemetry.log"
+CHANGELOG_FILE = "changelog.json"
 
 # ---------------- SESSION STATE INIT ----------------
 st.session_state.setdefault("ui_mode", "Laptop")
@@ -33,39 +62,78 @@ st.session_state.setdefault("confirm_clear_favs", False)
 st.session_state.setdefault("last_fetch_time", None)
 st.session_state.setdefault("theme", "light")
 st.session_state.setdefault("prefs_loaded", False)
+st.session_state.setdefault("refresh_in_progress", False)
+st.session_state.setdefault("last_manual_refresh", None)
 
 # ---------------- UTILITIES ----------------
-def load_json_safe(path):
+def load_json_safe(path: str) -> Optional[Any]:
     try:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
-    except Exception:
+    except Exception as e:
+        telemetry_log("load_json_error", {"path": path, "error": str(e)})
         return None
     return None
 
-def save_json_safe(path, obj):
+def save_json_safe(path: str, obj: Any) -> None:
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(obj, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        telemetry_log("save_json_error", {"path": path, "error": str(e)})
+
+def telemetry_log(event: str, payload: Optional[dict] = None) -> None:
+    entry = {"ts": datetime.now(timezone.utc).isoformat(), "event": event}
+    if payload:
+        entry.update(payload)
+    try:
+        with open(TELEMETRY_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception:
         pass
 
+# ---------------- CHANGELOG / UPDATE LOG ----------------
+
+def load_changelog() -> list:
+    existing = load_json_safe(CHANGELOG_FILE)
+    if isinstance(existing, list) and existing:
+        return existing
+    # persist default if no file
+    save_json_safe(CHANGELOG_FILE, DEFAULT_CHANGELOG)
+    return DEFAULT_CHANGELOG.copy()
+
+def save_changelog(changelog: list) -> None:
+    save_json_safe(CHANGELOG_FILE, changelog)
+
+# load changelog into session for quick access
+if "changelog" not in st.session_state:
+    st.session_state.changelog = load_changelog()
+
+def add_changelog_entry(version: str, notes: list[str], date: Optional[str] = None) -> None:
+    entry = {"version": version, "date": date or datetime.now().strftime("%Y-%m-%d"), "notes": notes}
+    # avoid duplicate version entries
+    versions = [e.get("version") for e in st.session_state.changelog]
+    if version in versions:
+        # replace existing
+        st.session_state.changelog = [e for e in st.session_state.changelog if e.get("version") != version]
+    st.session_state.changelog.insert(0, entry)
+    save_changelog(st.session_state.changelog)
+    telemetry_log("changelog_updated", {"version": version})
+
 # ---------------- PREFERENCES PERSISTENCE ----------------
-def load_prefs():
+def load_prefs() -> None:
     prefs = load_json_safe(PREF_FILE) or {}
-    # apply prefs to session_state
     st.session_state.theme = prefs.get("theme", st.session_state.theme)
     st.session_state.unit = prefs.get("unit", st.session_state.unit)
     st.session_state.wind_unit = prefs.get("wind_unit", st.session_state.wind_unit)
     st.session_state.compact_mode = prefs.get("compact_mode", st.session_state.compact_mode)
     last_city = prefs.get("last_city")
     if last_city:
-        # if last_city exists in favorites or mapping, set it later after mapping load
         st.session_state.setdefault("last_city_pref", last_city)
     st.session_state.prefs_loaded = True
 
-def save_prefs():
+def save_prefs() -> None:
     prefs = {
         "theme": st.session_state.theme,
         "unit": st.session_state.unit,
@@ -75,12 +143,21 @@ def save_prefs():
     }
     save_json_safe(PREF_FILE, prefs)
 
+def save_prefs_debounced() -> None:
+    try:
+        if os.path.exists(PREF_FILE):
+            if time.time() - os.path.getmtime(PREF_FILE) < 1:
+                return
+    except Exception:
+        pass
+    save_prefs()
+
 # ---------------- FAVORITES PERSISTENCE ----------------
-def load_favorites():
+def load_favorites() -> list:
     favs = load_json_safe(FAV_FILE)
     return favs or []
 
-def save_favorites(favs):
+def save_favorites(favs: list) -> None:
     save_json_safe(FAV_FILE, favs)
 
 if not st.session_state.favorite_cities:
@@ -111,7 +188,7 @@ DARK_CSS = """
 .stButton>button { background-color: var(--accent) !important; color: black !important; }
 """
 
-def apply_theme_css():
+def apply_theme_css() -> None:
     css = DARK_CSS if st.session_state.theme == "dark" else LIGHT_CSS
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
@@ -148,8 +225,11 @@ def format_age(ts):
         return f"{age_seconds//60}m"
     return f"{age_seconds//3600}h"
 
+def similarity(a, b):
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
 # ---------------- SPLASH ----------------
-def show_splash():
+def show_splash() -> None:
     splash_html = """
     <style>
     .splash { position: fixed; inset: 0; background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
@@ -161,7 +241,7 @@ def show_splash():
     """
     placeholder = st.empty()
     placeholder.markdown(splash_html, unsafe_allow_html=True)
-    time.sleep(1.2)
+    time.sleep(1.0)
     placeholder.empty()
 
 if not st.session_state.splash_done or st.session_state.ui_mode != st.session_state.last_ui_mode:
@@ -170,7 +250,6 @@ if not st.session_state.splash_done or st.session_state.ui_mode != st.session_st
     st.session_state.last_ui_mode = st.session_state.ui_mode
 
 # ---------------- HEADER ----------------
-# load prefs once at startup
 if not st.session_state.prefs_loaded:
     load_prefs()
 
@@ -178,59 +257,89 @@ apply_theme_css()
 st.title("🌦 Weather Time")
 st.caption("Your personal real-time weather assistant")
 st.markdown("---")
-st.caption("Version 1.2.3")
+st.caption("Version 1.2.3.2")
+
+# ---------------- SHOW UPDATE LOG (UI) ----------------
+with st.expander("📜 Update Log / Changelog", expanded=False):
+    # show latest entries
+    for entry in st.session_state.changelog:
+        st.markdown(f"**v{entry.get('version')} — {entry.get('date')}**")
+        for note in entry.get("notes", []):
+            st.write(f"- {note}")
+        st.markdown("---")
+    # allow export of changelog
+    try:
+        changelog_payload = json.dumps(st.session_state.changelog, ensure_ascii=False, indent=2)
+        st.download_button("⬇ Export changelog (JSON)", changelog_payload.encode("utf-8"), file_name="changelog.json", mime="application/json", key="download_changelog")
+    except Exception:
+        st.error("Unable to prepare changelog export")
 
 # ---------------- SIDEBAR CONTROLS ----------------
 st.sidebar.markdown("### 📱 UI Mode")
 new_ui = st.sidebar.radio("Select UI Mode", ["Laptop", "Mobile"],
-                          index=["Laptop", "Mobile"].index(st.session_state.ui_mode))
+                          index=["Laptop", "Mobile"].index(st.session_state.ui_mode), key="ui_mode_radio")
 if new_ui != st.session_state.ui_mode:
     st.session_state.ui_mode = new_ui
     st.session_state.splash_done = False
-    st.rerun()
+    try:
+        st.rerun()
+    except Exception:
+        safe_rerun()
 
 show_sidebar = st.session_state.ui_mode == "Laptop"
 
 st.sidebar.markdown("### 🌡 Temperature Unit")
 unit_choice = st.sidebar.radio("Select Unit", ["Celsius", "Fahrenheit"],
-                               index=["Celsius", "Fahrenheit"].index(st.session_state.unit))
+                               index=["Celsius", "Fahrenheit"].index(st.session_state.unit), key="unit_radio")
 if unit_choice != st.session_state.unit:
     st.session_state.unit = unit_choice
-    save_prefs()
+    save_prefs_debounced()
 
 st.sidebar.markdown("### 💨 Wind Speed Unit")
 wind_unit_choice = st.sidebar.radio("Select Wind Speed Unit", ["km/h", "mph"],
-                                    index=["km/h", "mph"].index(st.session_state.wind_unit))
+                                    index=["km/h", "mph"].index(st.session_state.wind_unit), key="wind_unit_radio")
 if wind_unit_choice != st.session_state.wind_unit:
     st.session_state.wind_unit = wind_unit_choice
-    save_prefs()
+    save_prefs_debounced()
 
 # Theme toggle
 st.sidebar.markdown("### 🎨 Theme")
-theme_choice = st.sidebar.radio("Color Mode", ["Light", "Dark"], index=0 if st.session_state.theme=="light" else 1)
+theme_choice = st.sidebar.radio("Color Mode", ["Light", "Dark"], index=0 if st.session_state.theme=="light" else 1, key="theme_radio")
 new_theme = "dark" if theme_choice == "Dark" else "light"
 if new_theme != st.session_state.theme:
     st.session_state.theme = new_theme
-    save_prefs()
+    save_prefs_debounced()
     apply_theme_css()
 
 # Compact layout toggle
 st.sidebar.markdown("### 🧭 Display")
-compact_choice = st.sidebar.checkbox("Compact mobile layout", value=st.session_state.compact_mode)
+compact_choice = st.sidebar.checkbox("Compact mobile layout", value=st.session_state.compact_mode, key="compact_checkbox")
 if compact_choice != st.session_state.compact_mode:
     st.session_state.compact_mode = compact_choice
-    save_prefs()
+    save_prefs_debounced()
 
-# manual refresh
-if st.sidebar.button("🔄 Refresh Weather Data"):
+# manual refresh and force refresh
+st.sidebar.markdown("### 🔁 Refresh")
+if st.sidebar.button("Refresh Weather Data (soft)", key="soft_refresh"):
     st.cache_data.clear()
-    st.rerun()
+    try:
+        st.rerun()
+    except Exception:
+        safe_rerun()
+
+if st.sidebar.button("Force refresh (bypass cache)", key="force_refresh"):
+    st.cache_data.clear()
+    st.session_state.last_manual_refresh = datetime.now(timezone.utc).isoformat()
+    try:
+        st.rerun()
+    except Exception:
+        safe_rerun()
 
 # clear favorites (sidebar quick)
-if st.sidebar.button("🗑 Clear Favorites (quick)"):
+if st.sidebar.button("🗑 Clear Favorites (quick)", key="clear_favs_quick"):
     st.session_state.confirm_clear_favs = True
 
-# ---------------- CONTINENTS & CITIES (sample mapping) ----------------
+# ---------------- CONTINENTS & CITIES (full mapping) ----------------
 continents = {
     "Custom Coordinates": {"Custom Coordinates": (0.0, 0.0)},
     "North America": {
@@ -340,7 +449,6 @@ continents = {
     }
 }
 
-
 def safe_city_index(city, cities_list):
     return cities_list.index(city) if city in cities_list else 0
 
@@ -355,7 +463,6 @@ if st.session_state.get("last_city_pref"):
     pref = st.session_state.get("last_city_pref")
     if pref in _flat_city_list:
         st.session_state.city = pref
-        # find continent
         for cont, cities in continents.items():
             if pref in cities:
                 st.session_state.continent = cont
@@ -365,19 +472,21 @@ if st.session_state.get("last_city_pref"):
 if show_sidebar:
     st.sidebar.markdown("### 🌍 Location")
     st.session_state.continent = st.sidebar.selectbox("Select Continent", list(continents.keys()),
-                                                      index=safe_city_index(st.session_state.continent, list(continents.keys())))
+                                                      index=safe_city_index(st.session_state.continent, list(continents.keys())),
+                                                      key="sidebar_continent")
     cities = list(continents[st.session_state.continent].keys())
     if st.session_state.city not in cities:
         st.session_state.city = cities[0]
     st.session_state.city = st.sidebar.selectbox("Select City", cities,
-                                                index=safe_city_index(st.session_state.city, cities))
+                                                index=safe_city_index(st.session_state.city, cities),
+                                                key="sidebar_city")
     st.sidebar.subheader("⭐ Favorite Cities")
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        fav_input = st.sidebar.text_input("Add a city", "")
+        fav_input_sidebar = st.sidebar.text_input("Add a city", "", key="sidebar_fav_input")
     with col2:
-        if st.sidebar.button("Add to Favorites") and fav_input.strip():
-            new_city = fav_input.strip()
+        if st.sidebar.button("Add to Favorites", key="sidebar_add_fav") and fav_input_sidebar.strip():
+            new_city = fav_input_sidebar.strip()
             if new_city not in st.session_state.favorite_cities:
                 st.session_state.favorite_cities.append(new_city)
                 save_favorites(st.session_state.favorite_cities)
@@ -385,8 +494,8 @@ if show_sidebar:
             else:
                 st.sidebar.info("Already in favorites")
     if st.session_state.favorite_cities:
-        remove_city = st.sidebar.selectbox("Remove favorite", [""] + st.session_state.favorite_cities)
-        if st.sidebar.button("Remove") and remove_city:
+        remove_city = st.sidebar.selectbox("Remove favorite", [""] + st.session_state.favorite_cities, key="sidebar_remove_fav")
+        if st.sidebar.button("Remove", key="sidebar_remove_btn") and remove_city:
             st.session_state.favorite_cities = [c for c in st.session_state.favorite_cities if c != remove_city]
             save_favorites(st.session_state.favorite_cities)
         st.sidebar.write(", ".join(st.session_state.favorite_cities))
@@ -396,21 +505,21 @@ else:
     with col1:
         st.session_state.continent = st.selectbox("Continent", list(continents.keys()),
                                                   index=safe_city_index(st.session_state.continent, list(continents.keys())),
-                                                  label_visibility="collapsed")
+                                                  label_visibility="collapsed", key="main_continent")
     cities = list(continents[st.session_state.continent].keys())
     if st.session_state.city not in cities:
         st.session_state.city = cities[0]
     with col2:
         st.session_state.city = st.selectbox("City", cities,
                                             index=safe_city_index(st.session_state.city, cities),
-                                            label_visibility="collapsed")
+                                            label_visibility="collapsed", key="main_city")
     st.subheader("⭐ Favorite Cities")
     col1, col2 = st.columns(2)
     with col1:
-        fav_input = st.text_input("Add a city", "")
+        fav_input_location = st.text_input("Add a city", "", key="location_fav_input")
     with col2:
-        if st.button("Add to Favorites") and fav_input.strip():
-            new_city = fav_input.strip()
+        if st.button("Add to Favorites", key="location_add_fav") and fav_input_location.strip():
+            new_city = fav_input_location.strip()
             if new_city not in st.session_state.favorite_cities:
                 st.session_state.favorite_cities.append(new_city)
                 save_favorites(st.session_state.favorite_cities)
@@ -418,8 +527,8 @@ else:
             else:
                 st.info("Already in favorites")
     if st.session_state.favorite_cities:
-        remove_city = st.selectbox("Remove favorite", [""] + st.session_state.favorite_cities)
-        if st.button("Remove") and remove_city:
+        remove_city = st.selectbox("Remove favorite", [""] + st.session_state.favorite_cities, key="main_remove_fav")
+        if st.button("Remove", key="main_remove_btn") and remove_city:
             st.session_state.favorite_cities = [c for c in st.session_state.favorite_cities if c != remove_city]
             save_favorites(st.session_state.favorite_cities)
         st.write(", ".join(st.session_state.favorite_cities))
@@ -431,37 +540,41 @@ except Exception:
     lat, lon = (0.0, 0.0)
 
 if st.session_state.city == "Custom Coordinates":
-    lat = st.number_input("Latitude", value=lat if lat is not None else 0.0, format="%.6f")
-    lon = st.number_input("Longitude", value=lon if lon is not None else 0.0, format="%.6f")
+    lat = st.number_input("Latitude", value=lat if lat is not None else 0.0, format="%.6f", key="custom_lat")
+    lon = st.number_input("Longitude", value=lon if lon is not None else 0.0, format="%.6f", key="custom_lon")
     if lat < -90 or lat > 90 or lon < -180 or lon > 180:
         st.warning("⚠ Please enter valid coordinates.")
         st.stop()
 
-# ---------------- SEARCHABLE CITY LOOKUP ----------------
+# ---------------- SEARCHABLE CITY LOOKUP (ranked) ----------------
 st.markdown("### 🔎 Quick city search")
-search_input = st.text_input("Type a city name (fuzzy search)", "")
+search_input = st.text_input("Type a city name (fuzzy search)", "", key="search_city")
 if search_input:
-    # use difflib to find close matches
-    matches = difflib.get_close_matches(search_input, _flat_city_list, n=10, cutoff=0.4)
+    scored = [(c, similarity(search_input, c)) for c in _flat_city_list]
+    scored = sorted(scored, key=lambda x: x[1], reverse=True)[:12]
+    matches = [c for c, s in scored if s > 0.25]
     if matches:
-        sel = st.selectbox("Matches", [""] + matches)
-        if sel:
-            # set continent and city
-            for cont, cities in continents.items():
-                if sel in cities:
-                    st.session_state.continent = cont
-                    st.session_state.city = sel
-                    st.session_state.last_city_pref = sel
-                    save_prefs()
-                    st.experimental_rerun()
+        for m, s in scored:
+            if s <= 0.25:
+                continue
+            label = f"{m}  —  {int(s*100)}%"
+            if st.button(label, key=f"match_{m}"):
+                for cont, cities in continents.items():
+                    if m in cities:
+                        st.session_state.continent = cont
+                        st.session_state.city = m
+                        st.session_state.last_city_pref = m
+                        save_prefs_debounced()
+                        try:
+                            st.rerun()
+                        except Exception:
+                            safe_rerun()
     else:
         st.info("No close matches found. Try a different spelling or add custom coordinates.")
 
-# ---------------- MAP DISPLAY ----------------
-# Build map DataFrame without using deprecated .append()
+# ---------------- MAP DISPLAY & COORDS PASTE ----------------
+st.markdown("### 🗺 Map view")
 records = []
-
-# selected city (only add if lat/lon are valid numbers)
 try:
     sel_lat = float(lat)
     sel_lon = float(lon)
@@ -469,7 +582,6 @@ try:
 except Exception:
     pass
 
-# favorites that exist in mapping
 for fav in st.session_state.favorite_cities:
     for cont, cities in continents.items():
         if fav in cities:
@@ -479,56 +591,103 @@ for fav in st.session_state.favorite_cities:
             except Exception:
                 continue
 
-# create DataFrame once
 if records:
     map_df = pd.DataFrame.from_records(records, columns=["lat", "lon", "name"])
-    # ensure numeric and drop invalid rows
     map_df["lat"] = pd.to_numeric(map_df["lat"], errors="coerce")
     map_df["lon"] = pd.to_numeric(map_df["lon"], errors="coerce")
     map_df = map_df.dropna(subset=["lat", "lon"])
 else:
     map_df = pd.DataFrame(columns=["lat", "lon", "name"])
 
-# render map if we have valid points
 if not map_df.empty:
     st.map(map_df[["lat", "lon"]])
 else:
     st.info("No valid coordinates to display on the map.")
 
-# ---------------- WEATHER API with OFFLINE FALLBACK ----------------
+st.markdown("**Set custom coordinates** — paste `lat, lon` from any map (e.g., Google Maps)")
+coords = st.text_input("Paste lat, lon", "", key="coords_input")
+if coords:
+    try:
+        lat_in, lon_in = [float(x.strip()) for x in coords.split(",")]
+        st.session_state.continent = "Custom Coordinates"
+        st.session_state.city = "Custom Coordinates"
+        lat, lon = lat_in, lon_in
+        st.session_state.last_city_pref = "Custom Coordinates"
+        save_prefs_debounced()
+        try:
+            st.rerun()
+        except Exception:
+            safe_rerun()
+    except Exception:
+        st.error("Invalid format. Use: 6.9271, 79.8612")
+
+# ---------------- RATE LIMITING & RETRIES ----------------
+def fetch_with_retries(url: str, attempts: int = 3, backoff: float = 0.6, timeout: int = 10) -> dict:
+    for i in range(attempts):
+        try:
+            resp = requests.get(url, timeout=timeout)
+            status = getattr(resp, "status_code", None)
+            if status == 429:
+                telemetry_log("rate_limited", {"attempt": i+1, "status": status})
+                time.sleep(backoff * (2 ** i))
+                continue
+            resp.raise_for_status()
+            telemetry_log("fetch_success_attempt", {"attempt": i+1, "status": status})
+            return resp.json()
+        except Exception as e:
+            telemetry_log("fetch_retry_error", {"attempt": i+1, "error": str(e)})
+            time.sleep(backoff * (2 ** i))
+    telemetry_log("fetch_failed_all_attempts", {"url": url})
+    return {}
+
+# ---------------- SAFE CALL WRAPPER ----------------
+def safe_call(fn, *args, **kwargs) -> Tuple[bool, Any, Optional[str]]:
+    try:
+        result = fn(*args, **kwargs)
+        return True, result, None
+    except Exception as e:
+        telemetry_log("safe_call_exception", {"fn": getattr(fn, "__name__", str(fn)), "error": str(e)})
+        return False, None, str(e)
+
+# ---------------- WEATHER API with OFFLINE FALLBACK & TELEMETRY ----------------
 @st.cache_data(ttl=600)
-def fetch_weather(lat, lon):
+def fetch_weather(lat: float, lon: float) -> dict:
     url = (
         f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&"
         "current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m,relativehumidity_2m&"
         "daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum&timezone=auto"
     )
-    try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception:
-        return {}
+    start = time.time()
+    data = fetch_with_retries(url, attempts=4, backoff=0.6, timeout=10)
+    duration_ms = int((time.time() - start) * 1000)
+    telemetry_log("fetch_weather_complete", {"lat": lat, "lon": lon, "duration_ms": duration_ms, "has_data": bool(data)})
+    return data
 
 with st.spinner("🌦 Fetching weather data..."):
-    data = fetch_weather(lat, lon)
-    if data:
-        # save last known good data
+    ok, data, err = safe_call(fetch_weather, lat, lon)
+    if ok and data:
         save_json_safe(LAST_DATA_FILE, {"fetched_at": datetime.now(timezone.utc).isoformat(), "lat": lat, "lon": lon, "data": data})
         st.session_state.last_fetch_time = datetime.now(timezone.utc)
+        telemetry_log("fetch_success", {"lat": lat, "lon": lon})
     else:
-        # try offline fallback
         last = load_json_safe(LAST_DATA_FILE)
         if last and "data" in last:
             data = last["data"]
-            # set last_fetch_time from saved timestamp if available
             try:
                 st.session_state.last_fetch_time = datetime.fromisoformat(last.get("fetched_at")).astimezone(timezone.utc)
             except Exception:
                 st.session_state.last_fetch_time = None
-            st.warning("Using last known data (offline fallback). Some values may be stale.")
+            st.warning("⚠ Showing last known data (offline). Click Retry to attempt fresh fetch.")
+            telemetry_log("offline_fallback", {"lat": lat, "lon": lon})
+            if st.button("Retry now", key="retry_now"):
+                st.cache_data.clear()
+                try:
+                    st.rerun()
+                except Exception:
+                    safe_rerun()
         else:
             st.error("Failed to fetch weather data and no cached data available.")
+            telemetry_log("fetch_failure_no_cache", {"lat": lat, "lon": lon, "error": err})
             st.stop()
 
 # ---------------- LAST UPDATED & CACHE INFO ----------------
@@ -607,7 +766,6 @@ else:
     st.subheader("🌟 Current Weather")
     c1, c2, c3, c4 = st.columns(4)
 
-    # Temperature trend
     temp_trend = None
     if not hourly_df.empty and "Temp" in hourly_df.columns and len(hourly_df) > 1:
         prev_temp = hourly_df["Temp"].iloc[-2]
@@ -615,7 +773,6 @@ else:
         if prev_temp is not None and curr_temp is not None:
             temp_trend = "↑" if curr_temp > prev_temp else "↓" if curr_temp < prev_temp else "→"
 
-    # Wind trend
     wind_trend = None
     if not hourly_df.empty and "Wind" in hourly_df.columns and len(hourly_df) > 1:
         prev_wind = hourly_df["Wind"].iloc[-2]
@@ -623,7 +780,6 @@ else:
         if prev_wind is not None and curr_wind is not None:
             wind_trend = "↑" if curr_wind > prev_wind else "↓" if curr_wind < prev_wind else "→"
 
-    # Rain trend
     rain_trend = None
     if not hourly_df.empty and "Rain" in hourly_df.columns and len(hourly_df) > 1:
         prev_rain = hourly_df["Rain"].iloc[-2]
@@ -675,10 +831,10 @@ p3.metric("Intensity", intensity)
 # ---------------- CHART CONTROLS ----------------
 if show_sidebar:
     st.sidebar.markdown("### 📊 Chart Controls")
-    st.session_state.show_charts_on = st.sidebar.checkbox("Show Charts", value=st.session_state.show_charts_on)
+    st.session_state.show_charts_on = st.sidebar.checkbox("Show Charts", value=st.session_state.show_charts_on, key="sidebar_show_charts")
 else:
     with st.expander("📊 Chart Controls"):
-        st.session_state.show_charts_on = st.checkbox("Show Charts", value=st.session_state.show_charts_on)
+        st.session_state.show_charts_on = st.checkbox("Show Charts", value=st.session_state.show_charts_on, key="main_show_charts")
 
 # ---------------- TABS ----------------
 tab1, tab2, tab3 = st.tabs(["📊 Hourly Charts", "📅 Daily Charts", "⚠ Alerts & Tips"])
@@ -693,9 +849,7 @@ with tab1:
         st.line_chart(hourly_df.set_index("Time")[["Wind"]])
         st.subheader("📋 Hourly Data")
         st.dataframe(hourly_df[["Time", "Temp", "Rain", "Wind", "Humidity"]], use_container_width=True)
-        st.download_button("⬇ Download Hourly Data (CSV)",
-                           hourly_df[["Time", "Temp", "Rain", "Wind", "Humidity"]].to_csv(index=False).encode("utf-8"),
-                           "hourly_weather.csv", "text/csv")
+        st.download_button("⬇ Download Hourly Data (CSV)", hourly_df[["Time", "Temp", "Rain", "Wind", "Humidity"]].to_csv(index=False).encode("utf-8"), "hourly_weather.csv", "text/csv", key="download_hourly")
     else:
         st.info("Hourly charts are hidden or no hourly data available")
 
@@ -707,9 +861,7 @@ with tab2:
         st.bar_chart(daily_df.set_index("Date")[["UV"]])
         st.subheader("📋 Daily Data")
         st.dataframe(daily_df, use_container_width=True)
-        st.download_button("⬇ Download Daily Data (CSV)",
-                           daily_df.to_csv(index=False).encode("utf-8"),
-                           "daily_weather.csv", "text/csv")
+        st.download_button("⬇ Download Daily Data (CSV)", daily_df.to_csv(index=False).encode("utf-8"), "daily_weather.csv", "text/csv", key="download_daily")
     else:
         st.info("Daily charts are hidden or no daily data available")
 
@@ -725,20 +877,53 @@ with tab3:
     st.write("- Dress smart")
     st.write("- Check updates hourly")
 
-# ---------------- FAVORITES (MAIN) ----------------
+# ---------------- FAVORITES (MAIN) with import/export and bulk add ----------------
 st.subheader("⭐ Favorite Cities")
-col1, col2 = st.columns(2)
+col1, col2 = st.columns([3,1])
 with col1:
-    main_fav_input = st.text_input("Add a city", "")
+    main_fav_input = st.text_input("Add a city (single or comma/newline separated for bulk)", "", key="favorites_main_input")
 with col2:
-    if st.button("Add to Favorites") and main_fav_input.strip():
-        new_city = main_fav_input.strip()
-        if new_city not in st.session_state.favorite_cities:
-            st.session_state.favorite_cities.append(new_city)
+    if st.button("Add to Favorites", key="favorites_main_add") and main_fav_input.strip():
+        # support bulk add
+        raw = main_fav_input.strip()
+        # split by comma or newline
+        items = [i.strip() for part in raw.splitlines() for i in part.split(",") if i.strip()]
+        added = 0
+        for new_city in items:
+            if new_city not in st.session_state.favorite_cities:
+                st.session_state.favorite_cities.append(new_city)
+                added += 1
+        if added:
             save_favorites(st.session_state.favorite_cities)
-            st.success("Added")
+            st.success(f"Added {added} favorite(s)")
         else:
-            st.info("Already in favorites")
+            st.info("No new favorites to add")
+
+# Export favorites
+if st.button("Export favorites (JSON)", key="export_favs"):
+    try:
+        payload = json.dumps(st.session_state.favorite_cities, ensure_ascii=False, indent=2)
+        st.download_button("Download favorites.json", payload.encode("utf-8"), file_name="favorites.json", mime="application/json", key="download_favs")
+    except Exception as e:
+        st.error("Failed to prepare export")
+        telemetry_log("export_favs_error", {"error": str(e)})
+
+# Import favorites
+uploaded = st.file_uploader("Import favorites (JSON)", type=["json"], key="import_favs")
+if uploaded:
+    try:
+        imported = json.load(uploaded)
+        if isinstance(imported, list):
+            # merge preserving order and uniqueness
+            combined = list(dict.fromkeys(st.session_state.favorite_cities + imported))
+            st.session_state.favorite_cities = combined
+            save_favorites(st.session_state.favorite_cities)
+            st.success("Imported favorites")
+        else:
+            st.error("Invalid format: expected a JSON array of city names")
+    except Exception as e:
+        st.error("Invalid file")
+        telemetry_log("import_favs_error", {"error": str(e)})
 
 if st.session_state.favorite_cities:
     st.write("Your favorites:")
@@ -749,22 +934,30 @@ if st.session_state.favorite_cities:
             if i > 0:
                 st.session_state.favorite_cities[i-1], st.session_state.favorite_cities[i] = st.session_state.favorite_cities[i], st.session_state.favorite_cities[i-1]
                 save_favorites(st.session_state.favorite_cities)
-                st.experimental_rerun()
+                try:
+                    st.rerun()
+                except Exception:
+                    safe_rerun()
         if cols[2].button("↓", key=f"fav_down_{i}"):
             if i < len(st.session_state.favorite_cities)-1:
                 st.session_state.favorite_cities[i+1], st.session_state.favorite_cities[i] = st.session_state.favorite_cities[i], st.session_state.favorite_cities[i+1]
                 save_favorites(st.session_state.favorite_cities)
-                st.experimental_rerun()
+                try:
+                    st.rerun()
+                except Exception:
+                    safe_rerun()
         if cols[3].button("Go", key=f"fav_go_{i}"):
-            # try to set continent and city
             found = False
             for cont, cities in continents.items():
                 if fav in cities:
                     st.session_state.continent = cont
                     st.session_state.city = fav
                     st.session_state.last_city_pref = fav
-                    save_prefs()
-                    st.experimental_rerun()
+                    save_prefs_debounced()
+                    try:
+                        st.rerun()
+                    except Exception:
+                        safe_rerun()
                     found = True
                     break
             if not found:
@@ -772,33 +965,36 @@ if st.session_state.favorite_cities:
         if cols[4].button("Remove", key=f"fav_remove_{i}"):
             st.session_state.favorite_cities = [c for c in st.session_state.favorite_cities if c != fav]
             save_favorites(st.session_state.favorite_cities)
-            st.experimental_rerun()
+            try:
+                st.rerun()
+            except Exception:
+                safe_rerun()
 
-    # Clear all with confirmation
     if st.session_state.confirm_clear_favs:
         st.warning("Are you sure you want to clear all favorites?")
         c1, c2 = st.columns(2)
-        if c1.button("Yes, clear all"):
+        if c1.button("Yes, clear all", key="confirm_clear_yes"):
             st.session_state.favorite_cities = []
             save_favorites(st.session_state.favorite_cities)
             st.session_state.confirm_clear_favs = False
-            st.experimental_rerun()
-        if c2.button("Cancel"):
+            try:
+                st.rerun()
+            except Exception:
+                safe_rerun()
+        if c2.button("Cancel", key="confirm_clear_no"):
             st.session_state.confirm_clear_favs = False
     else:
-        if st.button("🗑 Clear Favorites"):
+        if st.button("🗑 Clear Favorites", key="clear_favs_btn"):
             st.session_state.confirm_clear_favs = True
 
 # ---------------- SHAREABLE SNAPSHOT ----------------
 st.markdown("### 📤 Share / Export")
 summary = f"{st.session_state.city} — Temp: {temperature if temperature is not None else 'N/A'}{unit_symbol}, Wind: {wind_display if wind_display is not None else 'N/A'}{wind_symbol}, Rain: {rain_now} mm"
 st.write(summary)
-# download text snapshot
-st.download_button("⬇ Download snapshot (text)", summary.encode("utf-8"), file_name="weather_snapshot.txt", mime="text/plain")
+st.download_button("⬇ Download snapshot (text)", summary.encode("utf-8"), file_name="weather_snapshot.txt", mime="text/plain", key="download_snapshot")
 
 # ---------------- SAVE LAST CITY PREF ----------------
-# Save last selected city to prefs for persistence
 st.session_state.last_city_pref = st.session_state.city
-save_prefs()
+save_prefs_debounced()
 
 # ---------------- END ----------------

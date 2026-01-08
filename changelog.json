@@ -1,0 +1,30 @@
+[
+  {
+    "version": "1.2.3.2",
+    "date": "2026-01-07",
+    "notes": [
+      "Added robust retry logic and exponential backoff for API calls",
+      "Favorites import/export and bulk add",
+      "Safe rerun helper for Streamlit compatibility",
+      "Telemetry logging for API and errors",
+      "Unique widget keys to avoid duplicate element IDs",
+      "Update log UI and export"
+    ]
+  },
+  {
+    "version": "1.2.3.1",
+    "date": "2025-12-20",
+    "notes": [
+      "Restored full city mapping",
+      "Replaced experimental_rerun calls with safe_rerun fallback",
+      "Improved map building without deprecated DataFrame.append"
+    ]
+  },
+  {
+    "version": "1.2.3",
+    "date": "2025-11-05",
+    "notes": [
+      "Initial public release of Weather Time v1.2.3"
+    ]
+  }
+]

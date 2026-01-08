@@ -1,0 +1,47 @@
+{"ts": "2026-01-04T11:21:29.230934+00:00", "event": "api_call", "url": "https://api.open-meteo.com/v1/forecast?latitude=30.0444&longitude=31.2357&current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m,relativehumidity_2m&daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum&timezone=auto", "status": 200, "duration_ms": 1279}
+{"ts": "2026-01-04T11:21:29.243079+00:00", "event": "fetch_success", "lat": 30.0444, "lon": 31.2357}
+{"ts": "2026-01-04T11:21:44.486356+00:00", "event": "fetch_success", "lat": 30.0444, "lon": 31.2357}
+{"ts": "2026-01-04T11:36:30.165140+00:00", "event": "api_call", "url": "https://api.open-meteo.com/v1/forecast?latitude=6.9271&longitude=79.8612&current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m,relativehumidity_2m&daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum&timezone=auto", "status": 200, "duration_ms": 1089}
+{"ts": "2026-01-04T11:36:30.177208+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:36:33.914179+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:36:35.683007+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:36:37.240683+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:36:42.502018+00:00", "event": "api_call", "url": "https://api.open-meteo.com/v1/forecast?latitude=59.3293&longitude=18.0686&current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m,relativehumidity_2m&daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum&timezone=auto", "status": 200, "duration_ms": 1094}
+{"ts": "2026-01-04T11:36:42.510685+00:00", "event": "fetch_success", "lat": 59.3293, "lon": 18.0686}
+{"ts": "2026-01-04T11:36:46.696516+00:00", "event": "api_call", "url": "https://api.open-meteo.com/v1/forecast?latitude=59.9139&longitude=10.7522&current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m,relativehumidity_2m&daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum&timezone=auto", "status": 200, "duration_ms": 1102}
+{"ts": "2026-01-04T11:36:46.706001+00:00", "event": "fetch_success", "lat": 59.9139, "lon": 10.7522}
+{"ts": "2026-01-04T11:36:49.829109+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:36:58.700136+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:37:09.652809+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:37:19.512904+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:37:20.899823+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-04T11:37:24.195597+00:00", "event": "api_call", "url": "https://api.open-meteo.com/v1/forecast?latitude=38.7223&longitude=-9.1393&current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m,relativehumidity_2m&daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum&timezone=auto", "status": 200, "duration_ms": 1028}
+{"ts": "2026-01-04T11:37:24.203513+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:30.702310+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:31.028853+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:33.950235+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:38.589109+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:39.974310+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:42.306020+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:43.563881+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:48.722260+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:37:50.719300+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-04T11:41:22.451379+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-06T11:10:36.399937+00:00", "event": "api_call", "url": "https://api.open-meteo.com/v1/forecast?latitude=38.7223&longitude=-9.1393&current_weather=true&hourly=temperature_2m,precipitation,wind_speed_10m,relativehumidity_2m&daily=temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum&timezone=auto", "status": 200, "duration_ms": 1283}
+{"ts": "2026-01-06T11:10:36.466138+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-07T12:15:26.882248+00:00", "event": "fetch_success_attempt", "attempt": 1, "status": 200}
+{"ts": "2026-01-07T12:15:26.891039+00:00", "event": "fetch_weather_complete", "lat": 38.7223, "lon": -9.1393, "duration_ms": 1713, "has_data": true}
+{"ts": "2026-01-07T12:15:26.898997+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-07T12:29:02.429221+00:00", "event": "fetch_success_attempt", "attempt": 1, "status": 200}
+{"ts": "2026-01-07T12:29:02.499831+00:00", "event": "fetch_weather_complete", "lat": 38.7223, "lon": -9.1393, "duration_ms": 1741, "has_data": true}
+{"ts": "2026-01-07T12:29:02.556247+00:00", "event": "fetch_success", "lat": 38.7223, "lon": -9.1393}
+{"ts": "2026-01-07T13:26:58.753452+00:00", "event": "fetch_success_attempt", "attempt": 1, "status": 200}
+{"ts": "2026-01-07T13:26:58.774065+00:00", "event": "fetch_weather_complete", "lat": 35.6895, "lon": 139.6917, "duration_ms": 1038, "has_data": true}
+{"ts": "2026-01-07T13:26:58.803363+00:00", "event": "fetch_success", "lat": 35.6895, "lon": 139.6917}
+{"ts": "2026-01-07T13:27:05.317026+00:00", "event": "fetch_success_attempt", "attempt": 1, "status": 200}
+{"ts": "2026-01-07T13:27:05.321122+00:00", "event": "fetch_weather_complete", "lat": 6.9271, "lon": 79.8612, "duration_ms": 1135, "has_data": true}
+{"ts": "2026-01-07T13:27:05.328167+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-08T14:00:51.556348+00:00", "event": "fetch_success_attempt", "attempt": 1, "status": 200}
+{"ts": "2026-01-08T14:00:51.562782+00:00", "event": "fetch_weather_complete", "lat": 6.9271, "lon": 79.8612, "duration_ms": 1277, "has_data": true}
+{"ts": "2026-01-08T14:00:51.570873+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-08T14:02:22.926303+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
