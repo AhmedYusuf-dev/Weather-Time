@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.2.3.4.2",
+    "date": "2026-01-21",
+    "notes": [
+      "Implemented Multi-City Comparison Mode with dual-layered charts",
+      "Introduced 'Weather Comfort Score' algorithm (1-100) for activity planning",
+      "Added Astronomical Intelligence tab for Sunrise, Sunset, and Moon Phase tracking",
+      "Enhanced UI with circular gauges and bordered containers for astro data",
+      "Optimized API fetching to handle parallel requests for comparison city"
+    ]
+  },
+  {
     "version": "1.2.3.4.1",
     "date": "2026-01-21",
     "notes": [
