@@ -45,3 +45,10 @@
 {"ts": "2026-01-08T14:00:51.562782+00:00", "event": "fetch_weather_complete", "lat": 6.9271, "lon": 79.8612, "duration_ms": 1277, "has_data": true}
 {"ts": "2026-01-08T14:00:51.570873+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
 {"ts": "2026-01-08T14:02:22.926303+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-08T14:08:19.545927+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-08T14:08:33.527577+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-08T14:08:49.524012+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-08T14:08:59.212814+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}
+{"ts": "2026-01-21T10:50:45.591561+00:00", "event": "fetch_success_attempt", "attempt": 1, "status": 200}
+{"ts": "2026-01-21T10:50:45.610531+00:00", "event": "fetch_weather_complete", "lat": 6.9271, "lon": 79.8612, "duration_ms": 1340, "has_data": true}
+{"ts": "2026-01-21T10:50:45.619298+00:00", "event": "fetch_success", "lat": 6.9271, "lon": 79.8612}

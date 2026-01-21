@@ -1,5 +1,27 @@
 [
   {
+    "version": "1.2.3.3",
+    "date": "2026-01-21",
+    "notes": [
+      "Interface: Professional Tabbed navigation (Overview, Forecasts, System).",
+      "Database: Major global hubs across all 6 continents.",
+      "UI: Card-style metrics with st.container(border=True) for 2026 standard.",
+      "Changelog: Dynamic loading from external changelog.json file.",
+      "Reliability: Retained v1.2.3.2.1 Telemetry, Retries, and Persistence logic."
+    ]
+  },
+  {
+    "version": "1.2.3.2.1",
+    "date": "2026-01-08",
+    "notes": [
+      "Fixed favorites to use real coordinates",
+      "Added geocoding for any city worldwide",
+      "Fixed refresh button cache bypass",
+      "Fixed rain & humidity showing wrong hour",
+      "Added telemetry log rotation"
+    ]
+  },
+  {
     "version": "1.2.3.2",
     "date": "2026-01-07",
     "notes": [
