@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.2.3.4.2.2",
+    "date": "2026-01-21",
+    "notes": [
+      "Fixed 'KeyError: hourly' by enforcing explicit URL parameters for all API calls",
+      "Unified Glassmorphism HTML Hero Card with real-time Moon Phase emojis",
+      "Implemented Health Alerts for high UV and extreme heat monitoring",
+      "Added 'Quick Discover' grid in sidebar for instant global city switching",
+      "Introduced Visibility and Air Pollutant tracking (PM2.5/PM10) to the Intelligence tab"
+    ]
+  },
+  {
     "version": "1.2.3.4.2.1",
     "date": "2026-01-21",
     "notes": [
