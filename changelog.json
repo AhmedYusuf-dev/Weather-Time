@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.2.3.4.2.1",
+    "date": "2026-01-21",
+    "notes": [
+      "Added 'Global Discover' recommendation engine in the sidebar",
+      "Implemented State-driven city switching for smoother navigation",
+      "Integrated curated presets for major global hubs and Sri Lankan landmarks",
+      "Improved sidebar UI with grid-style button layout",
+      "Optimized geocoding performance for rapid city discovery"
+    ]
+  },
+  {
     "version": "1.2.3.4.2",
     "date": "2026-01-21",
     "notes": [
