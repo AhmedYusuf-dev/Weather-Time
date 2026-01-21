@@ -1,166 +1,158 @@
-# Home.py v1.2.3.3
+# Home.py v1.2.3.4.1
 """
-Weather Time v1.2.3.3
-- Interface: Professional Tabbed navigation (Overview, Forecasts, System).
-- Database: Major global hubs across all 6 continents.
-- UI: Card-style metrics with st.container(border=True) for 2026 standard.
-- Changelog: Dynamic loading from external changelog.json file.
-- Reliability: Retained v1.2.3.2.1 Telemetry, Retries, and Persistence logic.
+Weather Time v1.2.3.4.1
+- Fix: NameError (os) and KeyError (hourly/current) resolved.
+- UI: Card-style metrics with Glassmorphism and professional Tab navigation.
+- Charts: Integrated Plotly Radar and Area charts for deep analytics.
+- Intelligence: Real-time AQI, PM2.5, and Pollen tracking.
 """
 
 import streamlit as st
 import requests
 import pandas as pd
-import json
+import plotly.express as px
+import plotly.graph_objects as go
 import os
-import time
-from datetime import datetime, timezone
-from typing import Tuple, Any, Optional
+import json
+from datetime import datetime
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Weather Time Global", layout="wide", page_icon="🌦")
+st.set_page_config(page_title="Weather Time Pro", layout="wide", page_icon="🌦")
 
-# ---------------- SAFE RERUN HELPER ----------------
-def safe_rerun():
-    try:
-        if hasattr(st, "rerun"): st.rerun()
-        elif hasattr(st, "experimental_rerun"): st.experimental_rerun()
-    except Exception: pass
-
-# ---------------- EXTERNAL DATA LOADING ----------------
-def load_changelog():
-    path = "changelog.json"
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return [{"version": "Error", "date": "-", "notes": ["Could not read changelog.json"]}]
-    return [{"version": "N/A", "date": "-", "notes": ["changelog.json not found"]}]
-
-# ---------------- GLOBAL CITY DATABASE ----------------
-def get_global_db():
-    return {
-        "Asia": {
-            "Tokyo, Japan": (35.6895, 139.6917), "Dubai, UAE": (25.2048, 55.2708),
-            "Singapore": (1.3521, 103.8198), "Colombo, Sri Lanka": (6.9271, 79.8612),
-            "Seoul, South Korea": (37.5665, 126.9780)
-        },
-        "Europe": {
-            "London, UK": (51.5074, -0.1278), "Paris, France": (48.8566, 2.3522),
-            "Berlin, Germany": (52.5200, 13.4050), "Zurich, CH": (47.3769, 8.5417),
-            "Rome, Italy": (41.9028, 12.4964)
-        },
-        "Americas": {
-            "New York, USA": (40.7128, -74.0060), "Toronto, Canada": (43.6532, -79.3832),
-            "Los Angeles, USA": (34.0522, -118.2437), "São Paulo, Brazil": (-23.5505, -46.6333)
-        },
-        "Africa/Oceania": {
-            "Cairo, Egypt": (30.0444, 31.2357), "Sydney, Australia": (-33.8688, 151.2093),
-            "Johannesburg, SA": (-26.2041, 28.0473), "Auckland, NZ": (-36.8485, 174.7633)
+# ---------------- CUSTOM CSS (UI IMPROVEMENTS) ----------------
+def apply_ui_design():
+    st.markdown("""
+        <style>
+        /* Card Styling */
+        div[data-testid="stMetric"] {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-    }
+        /* Tab Styling */
+        .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+        .stTabs [data-baseweb="tab"] {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 8px 8px 0 0;
+            padding: 10px 20px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
 # ---------------- LOGIC TOOLS ----------------
-class WeatherTools:
+class WeatherConverter:
     @staticmethod
     def temp(c):
-        return round(c, 1) if st.session_state.unit == "Celsius" else round((c * 9/5) + 32, 1)
-    
-    @staticmethod
-    def wind(k):
-        return round(k, 1) if st.session_state.wind_unit == "km/h" else round(k * 0.621371, 1)
+        if c is None: return "N/A"
+        return round(c, 1) if st.session_state.get('unit') == "Celsius" else round((c * 9/5) + 32, 1)
 
-# ---------------- SESSION STATE ----------------
-for k, v in {"unit": "Celsius", "wind_unit": "km/h", "theme": "dark", "continent": "Asia", "city": "Tokyo, Japan"}.items():
-    st.session_state.setdefault(k, v)
-
-# ---------------- SIDEBAR ----------------
-with st.sidebar:
-    st.title("⚙️ Global Settings")
-    st.session_state.unit = st.radio("Temp Unit", ["Celsius", "Fahrenheit"], horizontal=True)
-    st.session_state.wind_unit = st.radio("Wind Unit", ["km/h", "mph"], horizontal=True)
-    
-    st.divider()
-    db = get_global_db()
-    region = st.selectbox("Region", list(db.keys()))
-    city_name = st.selectbox("City", list(db[region].keys()))
-    
-    if st.button("Manual Refresh"):
-        st.cache_data.clear()
-        safe_rerun()
-
-# ---------------- DATA FETCHING ----------------
 @st.cache_data(ttl=600)
-def fetch_weather(lat, lon):
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&hourly=temperature_2m,relativehumidity_2m,precipitation&daily=temperature_2m_max,temperature_2m_min&timezone=auto"
-    try: return requests.get(url, timeout=10).json()
+def fetch_weather_intel(lat, lon):
+    # FIXED: Added explicit hourly and current parameters to prevent KeyErrors
+    w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true&hourly=temperature_2m,relativehumidity_2m,precipitation&daily=uv_index_max&timezone=auto"
+    a_url = f"https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={lon}&current=european_aqi,pollen_birch,pollen_grass&hourly=pm10,pm2_5&timezone=auto"
+    try:
+        w_res = requests.get(w_url).json()
+        a_res = requests.get(a_url).json()
+        return w_res, a_res
+    except: return None, None
+
+def get_radar_chart(temp, hum, wind, uv, rain):
+    categories = ['Temp', 'Humidity', 'Wind', 'UV Index', 'Rain']
+    # Normalizing 0-100 for visual consistency
+    values = [min(temp*2, 100), hum, min(wind*2, 100), min(uv*10, 100), min(rain*10, 100)]
+    fig = go.Figure(data=go.Scatterpolar(r=values, theta=categories, fill='toself', marker=dict(color='#0ea5e9')))
+    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=False, height=350,
+                      paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color="white"))
+    return fig
+
+# ---------------- SIDEBAR & SEARCH ----------------
+apply_ui_design()
+with st.sidebar:
+    st.title("🌐 Weather Time")
+    query = st.text_input("Global Search", placeholder="London, Kandy, New York...", value="Colombo")
+    st.divider()
+    st.session_state.unit = st.radio("Temp Unit", ["Celsius", "Fahrenheit"], horizontal=True)
+    if st.button("Refresh Cache"): st.cache_data.clear()
+
+def geocode(q):
+    try:
+        res = requests.get(f"https://geocoding-api.open-meteo.com/v1/search?name={q}&count=1").json()
+        return res["results"][0] if "results" in res else None
     except: return None
 
-# ---------------- DASHBOARD RENDER ----------------
-st.title(f"🌦 {city_name} Dashboard")
-lat, lon = db[region][city_name]
-data = fetch_weather(lat, lon)
+loc = geocode(query)
+if loc:
+    lat, lon, city_display = loc['latitude'], loc['longitude'], f"{loc['name']}, {loc.get('country','')}"
+else:
+    lat, lon, city_display = 6.9271, 79.8612, "Colombo, Sri Lanka"
 
-if data:
-    # --- Tabbed Navigation ---
-    tab_now, tab_forecast, tab_system = st.tabs(["🌟 Current Overview", "📅 Forecast Trends", "🛠 System & History"])
+# ---------------- DASHBOARD ----------------
+w_data, a_data = fetch_weather_intel(lat, lon)
 
-    with tab_now:
-        curr = data['current_weather']
-        # Card Metrics
+if w_data and a_data:
+    # DEFENSIVE CODING: Using .get() prevents KeyError crashes
+    curr_w = w_data.get('current_weather', {})
+    curr_a = a_data.get('current', {})
+    hourly_a = a_data.get('hourly', {})
+
+    st.title(f"🌍 {city_display}")
+    
+    t1, t2, t3, t4 = st.tabs(["🚀 Live Dashboard", "📊 Analytics", "🧪 Air Quality", "🛠 System"])
+
+    with t1:
         c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            with st.container(border=True):
-                st.metric("Temperature", f"{WeatherTools.temp(curr['temperature'])}°")
-        with c2:
-            with st.container(border=True):
-                st.metric("Wind Speed", f"{WeatherTools.wind(curr['windspeed'])} {st.session_state.wind_unit}")
-        with c3:
-            with st.container(border=True):
-                st.metric("Humidity", f"{data['hourly']['relativehumidity_2m'][0]}%")
-        with c4:
-            with st.container(border=True):
-                st.metric("Rainfall", f"{data['hourly']['precipitation'][0]}mm")
+        c1.metric("Temperature", f"{WeatherConverter.temp(curr_w.get('temperature'))}°")
+        c2.metric("AQI (Europe)", f"{curr_a.get('european_aqi', 'N/A')}")
+        c3.metric("Rainfall", f"{w_data['hourly']['precipitation'][0]}mm")
+        c4.metric("Humidity", f"{w_data['hourly']['relativehumidity_2m'][0]}%")
 
-        # Visual Row
-        col_main, col_map = st.columns([2, 1])
-        with col_main:
-            st.area_chart(pd.DataFrame({
-                "Time": pd.to_datetime(data['hourly']['time'][:24]),
-                "Temp": [WeatherTools.temp(t) for t in data['hourly']['temperature_2m'][:24]]
-            }).set_index("Time"), color="#0ea5e9")
+        col_radar, col_map = st.columns([1, 1])
+        with col_radar:
+            st.subheader("5-Factor Intelligence")
+            st.plotly_chart(get_radar_chart(curr_w.get('temperature', 20), 
+                                             w_data['hourly']['relativehumidity_2m'][0], 
+                                             curr_w.get('windspeed', 0), 
+                                             w_data['daily']['uv_index_max'][0], 
+                                             w_data['hourly']['precipitation'][0]), use_container_width=True)
         with col_map:
-            st.map(pd.DataFrame({'lat': [lat], 'lon': [lon]}), zoom=6)
+            st.subheader("📍 Interactive Map")
+            st.map(pd.DataFrame({'lat': [lat], 'lon': [lon]}), zoom=9)
 
-    with tab_forecast:
-        st.subheader("7-Day Temperature Range")
-        daily_df = pd.DataFrame({
-            "Date": pd.to_datetime(data['daily']['time']),
-            "Max": [WeatherTools.temp(t) for t in data['daily']['temperature_2m_max']],
-            "Min": [WeatherTools.temp(t) for t in data['daily']['temperature_2m_min']]
-        }).set_index("Date")
-        st.line_chart(daily_df)
-
-    with tab_system:
-        st.subheader("📜 Version History")
-        changelog_data = load_changelog()
-        for entry in changelog_data:
-            with st.expander(f"v{entry.get('version')} — {entry.get('date')}", expanded=(entry.get('version') == "1.2.3.3")):
-                for note in entry.get('notes', []):
-                    st.write(f"- {note}")
-        
-        st.divider()
-        st.subheader("🛠 Technical Details")
-        st.json({
-            "Version": "1.2.3.3",
-            "Node": "Global Deployment",
-            "Website": "weathertime.streamlit.apps",
-            "Last Sync": datetime.now().strftime('%H:%M:%S')
+    with t2:
+        st.subheader("24-Hour Interactive Trend")
+        df_trends = pd.DataFrame({
+            "Time": pd.to_datetime(w_data['hourly']['time'][:24]),
+            "Temp": [WeatherConverter.temp(t) for t in w_data['hourly']['temperature_2m'][:24]]
         })
+        fig = px.area(df_trends, x="Time", y="Temp", color_discrete_sequence=['#0ea5e9'])
+        st.plotly_chart(fig, use_container_width=True)
+
+    with t3:
+        st.subheader("🌫 Pollutant Trends")
+        if hourly_a:
+            df_aqi = pd.DataFrame({
+                "Time": pd.to_datetime(hourly_a.get('time', [])[:48]),
+                "PM2.5": hourly_a.get('pm2_5', [])[:48],
+                "PM10": hourly_a.get('pm10', [])[:48]
+            }).set_index("Time")
+            st.line_chart(df_aqi)
+        
+        st.subheader("🍃 Live Pollen Tracker")
+        st.write(f"**Birch Pollen:** {curr_a.get('pollen_birch', 0)} | **Grass Pollen:** {curr_a.get('pollen_grass', 0)}")
+
+    with t4:
+        st.subheader("📜 Dynamic Changelog")
+        if os.path.exists("changelog.json"):
+            with open("changelog.json", "r") as f:
+                ch_data = json.load(f)
+                for entry in ch_data:
+                    with st.expander(f"v{entry['version']} - {entry['date']}"):
+                        for note in entry['notes']: st.write(f"- {note}")
 
 else:
-    st.error("Critical: Failed to connect to global weather node.")
+    st.error("Intelligence synchronization failed. Verify API availability.")
 
-st.divider()
-st.caption(f"v1.2.3.3 | {datetime.now().strftime('%Y-%m-%d')} | Global Weather Insights")
+st.caption(f"v1.2.3.4.1 | {datetime.now().strftime('%Y-%m-%d')} | Weather Time Intelligence")

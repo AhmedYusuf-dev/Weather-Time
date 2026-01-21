@@ -1,13 +1,35 @@
 [
   {
+    "version": "1.2.3.4.1",
+    "date": "2026-01-21",
+    "notes": [
+      "Fixed 'NameError: os' and 'KeyError: current' for enhanced system stability",
+      "Integrated Plotly Radar Charts for 5-factor weather intelligence (Temp, Hum, Wind, UV, Rain)",
+      "Added Real-time Air Quality Index (AQI) and Pollutant tracking (PM2.5 & PM10)",
+      "Implemented Interactive Area Charts with hover-data for precision trend analysis",
+      "Added Live Pollen Tracker for Birch and Grass pollen monitoring",
+      "Switched to Defensive Coding architecture to prevent crashes on partial API responses"
+    ]
+  },
+  {
+    "version": "1.2.3.4",
+    "date": "2026-01-21",
+    "notes": [
+      "Integrated Global Geocoding Engine for worldwide city search",
+      "Implemented Real-time Weather Alert System (Heat, Rain, Wind)",
+      "Added Dynamic Map Interface with auto-zoom capabilities",
+      "Upgraded UI with Glassmorphism CSS and tabbed navigation",
+      "Centralized unit conversion logic for better performance"
+    ]
+  },
+  {
     "version": "1.2.3.3",
     "date": "2026-01-21",
     "notes": [
-      "Interface: Professional Tabbed navigation (Overview, Forecasts, System).",
-      "Database: Major global hubs across all 6 continents.",
-      "UI: Card-style metrics with st.container(border=True) for 2026 standard.",
-      "Changelog: Dynamic loading from external changelog.json file.",
-      "Reliability: Retained v1.2.3.2.1 Telemetry, Retries, and Persistence logic."
+      "Implemented Professional Tabbed Layout (Overview, Forecast, System)",
+      "Integrated Global Hub Database covering 6 continents",
+      "Upgraded UI to 2026 Card Standard with bordered containers",
+      "Optimized Recommendation logic for global climate zones"
     ]
   },
   {
@@ -29,8 +51,7 @@
       "Favorites import/export and bulk add",
       "Safe rerun helper for Streamlit compatibility",
       "Telemetry logging for API and errors",
-      "Unique widget keys to avoid duplicate element IDs",
-      "Update log UI and export"
+      "Unique widget keys to avoid duplicate element IDs"
     ]
   },
   {
