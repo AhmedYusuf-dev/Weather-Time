@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.2.3.5",
+    "date": "2026-01-23",
+    "notes": [
+      "Final Release Architecture: Fixed persistent AttributeError crashes",
+      "Implemented Master Initialization in Home.py for all shared state variables",
+      "Added 'Gatekeeper' st.stop() checks to all sub-intelligence pages",
+      "Unified CSS-driven Glassmorphism UI across multi-page navigation",
+      "Enhanced location metadata persistence for high-speed city switching"
+    ]
+  },
+  {
     "version": "1.2.3.4.2.2",
     "date": "2026-01-21",
     "notes": [
