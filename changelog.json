@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.2.3.5.1",
+    "date": "2026-01-24",
+    "notes": [
+      "Implemented Smart Autocomplete Search using local city database",
+      "Launched Geospatial Map Node for visual location tracking",
+      "Added 'Apparent Temperature' and 'Visibility' to telemetry metrics",
+      "Enabled Dual-Input Search (Dropdown + Manual Override)"
+    ]
+  },
+  {
     "version": "1.2.3.5",
     "date": "2026-01-23",
     "notes": [
