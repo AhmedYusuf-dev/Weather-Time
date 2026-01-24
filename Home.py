@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import os
 import pandas as pd
+import json  # <--- ADD THIS LINE
 from datetime import datetime
 
 # 1. PAGE CONFIG
@@ -77,5 +78,35 @@ if payload:
 
 else:
     st.error("Connection failed. Please check city name.")
+
+# --- CHANGELOG NODE (Add this to the bottom of Home.py) ---
+st.markdown("---")
+st.subheader("🛠 System Version History")
+
+changelog_path = "changelog.json"
+
+if os.path.exists(changelog_path):
+    try:
+        with open(changelog_path, "r") as f:
+            changelog_data = json.load(f)
+            
+            # Display each version in a clean expander
+            for entry in changelog_data:
+                with st.expander(f"🚀 Version {entry['version']} — {entry['date']}"):
+                    for note in entry['notes']:
+                        st.markdown(f"• {note}")
+    except Exception as e:
+        st.error(f"Failed to parse changelog: {e}")
+else:
+    # If the file is missing, we show this helpful alert
+    st.info("Changelog file not found. Ensure 'changelog.json' is in your main Dash_Board folder.")
+    # Create a dummy one for the user to see what it should look like
+    if st.button("Generate Template changelog.json"):
+        template = [
+            {"version": "1.2.3.5", "date": "2026-01-24", "notes": ["Final Release Candidate", "Glassmorphism UI"]}
+        ]
+        with open("changelog.json", "w") as f:
+            json.dump(template, f, indent=4)
+        st.rerun()
 
 st.caption(f"v1.2.3.5 | Data Node Only | {datetime.now().strftime('%H:%M:%S')}")

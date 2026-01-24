@@ -7,7 +7,12 @@
       "Implemented Master Initialization in Home.py for all shared state variables",
       "Added 'Gatekeeper' st.stop() checks to all sub-intelligence pages",
       "Unified CSS-driven Glassmorphism UI across multi-page navigation",
-      "Enhanced location metadata persistence for high-speed city switching"
+      "Enhanced location metadata persistence for high-speed city switching",
+      "Official Release Candidate: No-AI Data Intelligence Hub",
+      "Fixed persistence bugs across Home, Analytics, and Garage nodes",
+      "Implemented hardware-accelerated Glassmorphism via assets/style.css",
+      "Synchronized precipitation telemetry for 24-hour car wash index",
+      "Added safety-guarded session state initialization"
     ]
   },
   {
