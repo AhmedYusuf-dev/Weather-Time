@@ -248,4 +248,4 @@ if os.path.exists("changelog.json"):
             with st.expander(f"🚀 v{entry['version']} — {entry['date']}"):
                 for n in entry['notes']: st.markdown(f"• {n}")
 else:
-    st.caption("v1.3.0 | Premium Redesign | Glassmorphism UI")
+    st.caption("v1.3.1 | Minor Update | Stability Improvements")
