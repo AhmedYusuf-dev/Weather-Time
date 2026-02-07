@@ -1,5 +1,20 @@
 [
   {
+    "version": "1.3.0",
+    "date": "2026-02-07",
+    "notes": [
+      "🎨 Premium UI Redesign: Full Glassmorphism design with custom Google Font 'Outfit'",
+      "📅 7-Day Weather Forecast with daily min/max temps and weather icons",
+      "📊 Interactive Plotly Charts replacing static area charts",
+      "💡 AI-Powered Lifestyle Tips (umbrella alerts, UV warnings, clothing recommendations)",
+      "📡 Expanded Telemetry Grid: Feels Like, Humidity, Wind Speed, UV Index, Precipitation",
+      "🎯 Dynamic Weather Icons based on WMO weather codes and day/night cycle",
+      "🗺️ Enhanced geospatial mapping with improved zoom levels",
+      "⚙️ Premium Settings sidebar with demo features",
+      "🌈 Gradient city title headers with translucent glass cards throughout"
+    ]
+  },
+  {
     "version": "1.2.3.5.1",
     "date": "2026-01-24",
     "notes": [
