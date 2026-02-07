@@ -30,8 +30,8 @@ body,
 /* GLASSMORPHISM CARD UTILITY */
 .glass-card {
     background: var(--glass-bg);
-    backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
     border: 1px solid var(--glass-border);
     border-radius: 16px;
     padding: 20px;
@@ -79,6 +79,7 @@ h3 {
     font-weight: 700;
     background: linear-gradient(to right, #ffffff, #38bdf8);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.5rem;
 }
@@ -105,4 +106,33 @@ h3 {
 /* HIDE DEFAULT HEADER Elements if desired */
 header[data-testid="stHeader"] {
     background: transparent;
+}
+
+/* RESPONSIVE DESIGN (Mobile < 768px) */
+@media only screen and (max-width: 768px) {
+    .city-title {
+        font-size: 2.5rem;
+        text-align: center;
+    }
+
+    .current-temp-hero {
+        font-size: 4rem;
+    }
+
+    div[data-testid="stColumn"] {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+    }
+
+    .glass-card {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    /* Adjust flex container in hero */
+    div[style*="align-items:center"] {
+        flex-direction: column;
+        text-align: center;
+    }
 }

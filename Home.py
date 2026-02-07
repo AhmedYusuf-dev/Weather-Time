@@ -131,6 +131,44 @@ with st.sidebar:
     st.markdown("### ⚙️ Premium Settings")
     st.checkbox("High Contrast Mode")
     st.checkbox("Live Satellite Feed (Demo)")
+    
+    # DEVICE DETECTION (Client-Side)
+    st.markdown("---")
+    st.markdown("### 📱 Device Telemetry")
+    import streamlit.components.v1 as components
+    
+    # JS to detect device and display it
+    js_code = """
+    <script>
+    function detectDevice() {
+        var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        var deviceType = "🖥️ Desktop Node";
+        if (/android/i.test(userAgent)) {
+            deviceType = "🤖 Mobile (Android)";
+        }
+        else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+            deviceType = "🍎 Mobile (iOS)";
+        }
+        
+        document.getElementById("device-tag").innerHTML = deviceType;
+        
+        // Optional: Communicate back to Streamlit if needed (advanced)
+    }
+    </script>
+    <div style="
+        padding: 10px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 8px;
+        color: #38bdf8;
+        font-family: 'Outfit', sans-serif;
+        font-weight: bold;
+        text-align: center;
+    ">
+        <span id="device-tag">Detecting...</span>
+    </div>
+    <script>detectDevice();</script>
+    """
+    components.html(js_code, height=50)
 
 # 5. MAIN HUB LOGIC
 payload = get_weather_intel(st.session_state.city_name)
@@ -248,4 +286,4 @@ if os.path.exists("changelog.json"):
             with st.expander(f"🚀 v{entry['version']} — {entry['date']}"):
                 for n in entry['notes']: st.markdown(f"• {n}")
 else:
-    st.caption("v1.3.1 | Minor Update | Stability Improvements")
+    st.caption("v1.3.1.1 | Responsive Layout | Mobile Detection")

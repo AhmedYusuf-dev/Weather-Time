@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.3.1.1",
+    "date": "2026-02-07",
+    "notes": [
+      "📱 Responsive Layout: Optimized for Mobile & Tablet devices",
+      "🖥️ Device Telemetry: Auto-detection of Desktop vs Mobile in settings",
+      "✨ UI Polish: Adjusted font sizes and card padding for smaller screens"
+    ]
+  },
+  {
     "version": "1.3.1",
     "date": "2026-02-07",
     "notes": [
